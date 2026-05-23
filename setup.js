@@ -13,6 +13,7 @@ const folders = [
   'src/types',
   'src/utils',
   'src/database',
+  'src/constants',
 ];
 
 const files = [
@@ -39,7 +40,6 @@ const files = [
   'src/screens/HistoryScreen.tsx',
   'src/screens/SettingsScreen.tsx',
   'src/screens/ResumeScreen.tsx',
-  'src/screens/HistoryScreen.tsx',
   // Navigation
   'src/navigation/AppNavigator.tsx',
   // Store
@@ -64,6 +64,8 @@ const files = [
   'src/utils/formatters.ts',
   'src/utils/shuffle.ts',
   'src/utils/dateHelpers.ts',
+  // Constants
+  'src/constants/theme.ts',
 ];
 
 folders.forEach(folder => {
