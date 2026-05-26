@@ -3,19 +3,23 @@
  * Lock icon · numbered steps HOW TO ENABLE · Open Settings · re-check link
  * Design ref: Image 7 (full) + Image 2 (bottom-sheet state)
  */
-import React from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Linking,
+  AppState,
+  type AppStateStatus,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types';
 import { Colors, Font, Radius, rw, rh, rf } from '../constants/theme';
+import { checkPhotoPermission, isUsable } from '../services/permissions';
 
 type Props = StackScreenProps<RootStackParamList, 'Denied'>;
 
@@ -29,11 +33,52 @@ const STEPS = [
 export default function DeniedScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const [checking, setChecking] = useState(false);
+  const [showStillDenied, setShowStillDenied] = useState(false);
+  const sentToSettings = useRef(false);
 
-  const handleOpenSettings = () => Linking.openSettings();
+  const runRecheck = useCallback(
+    async (silent = false) => {
+      if (!silent) setChecking(true);
+      try {
+        const result = await checkPhotoPermission();
+        if (isUsable(result.state)) {
+          navigation.replace('Loading');
+        } else if (!silent) {
+          setShowStillDenied(true);
+        }
+      } finally {
+        if (!silent) setChecking(false);
+      }
+    },
+    [navigation],
+  );
 
-  // Re-check: navigate back to Permission so it re-requests
-  const handleRecheck = () => navigation.replace('Permission');
+  // Auto-recheck when app returns to foreground (e.g. user came back from Settings)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state: AppStateStatus) => {
+      if (state === 'active' && sentToSettings.current) {
+        sentToSettings.current = false;
+        runRecheck(true);
+      }
+    });
+    return () => sub.remove();
+  }, [runRecheck]);
+
+  // Also re-check whenever this screen regains focus
+  useFocusEffect(
+    useCallback(() => {
+      runRecheck(true);
+    }, [runRecheck]),
+  );
+
+  const handleOpenSettings = () => {
+    sentToSettings.current = true;
+    setShowStillDenied(false);
+    Linking.openSettings();
+  };
+
+  const handleRecheck = () => runRecheck(false);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + rh(32), paddingBottom: insets.bottom + rh(16) }]}>
@@ -76,20 +121,32 @@ export default function DeniedScreen({ navigation }: Props) {
 
         <View style={{ flex: 1 }} />
 
+        {/* "Still denied" inline hint */}
+        {showStillDenied && (
+          <Text style={[styles.stillDenied, { fontSize: rf(13) }]}>
+            Still denied — make sure Photos access is enabled in Settings.
+          </Text>
+        )}
+
         {/* Open Settings button */}
         <TouchableOpacity
-          style={[styles.settingsBtn, { width: width - rw(40), borderRadius: Radius.full }]}
+          style={[
+            styles.settingsBtn,
+            { width: width - rw(40), borderRadius: Radius.full },
+            checking && styles.settingsBtnDisabled,
+          ]}
           onPress={handleOpenSettings}
           activeOpacity={0.85}
+          disabled={checking}
         >
           <Text style={[styles.settingsBtnIcon, { fontSize: rf(17) }]}>⚙</Text>
           <Text style={[styles.settingsBtnText, { fontSize: rf(17) }]}>Open Settings →</Text>
         </TouchableOpacity>
 
         {/* Re-check link */}
-        <TouchableOpacity onPress={handleRecheck} style={styles.recheckBtn}>
+        <TouchableOpacity onPress={handleRecheck} style={styles.recheckBtn} disabled={checking}>
           <Text style={[styles.recheckText, { fontSize: rf(15) }]}>
-            ↻  I've enabled it — re-check
+            {checking ? 'Checking…' : '↻  I\'ve enabled it — re-check'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -176,6 +233,13 @@ const styles = StyleSheet.create({
   privacyText: {
     color: Colors.textMuted,
   },
+  // Inline hint
+  stillDenied: {
+    color: Colors.delete,
+    textAlign: 'center',
+    marginBottom: rh(10),
+  },
+
   // Buttons
   settingsBtn: {
     backgroundColor: Colors.purple3,
@@ -185,6 +249,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: rw(8),
     marginBottom: rh(12),
+  },
+  settingsBtnDisabled: {
+    opacity: 0.6,
   },
   settingsBtnIcon: {
     color: Colors.white,
