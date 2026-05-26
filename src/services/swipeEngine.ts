@@ -182,3 +182,53 @@ export async function pauseSession(sessionId: string): Promise<void> {
   const db = await getDatabase();
   await db.runAsync(`UPDATE sessions SET status = 'paused' WHERE id = ?`, sessionId);
 }
+
+export async function rescuePhoto(sessionId: string, photoId: string): Promise<boolean> {
+  const db = await getDatabase();
+  const record = await db.getFirstAsync<SwipeRecordRow>(
+    `SELECT * FROM swipe_records WHERE session_id = ? AND photo_id = ? ORDER BY id DESC LIMIT 1`,
+    sessionId,
+    photoId,
+  );
+  if (!record) return false;
+
+  const sizeDelta = record.decision === 'delete' ? (record.file_size ?? 0) : 0;
+  const date = todayKey(record.timestamp);
+
+  await withTransaction(async (tx) => {
+    await tx.runAsync(`DELETE FROM swipe_records WHERE id = ?`, record.id);
+
+    await tx.runAsync(
+      `UPDATE session_queue SET status = 'pending' WHERE session_id = ? AND photo_id = ?`,
+      sessionId,
+      photoId,
+    );
+
+    await tx.runAsync(
+      `UPDATE sessions SET
+         kept_count = kept_count - CASE WHEN ? = 'keep' THEN 1 ELSE 0 END,
+         deleted_count = deleted_count - CASE WHEN ? = 'delete' THEN 1 ELSE 0 END,
+         storage_saved_bytes = storage_saved_bytes - ?
+       WHERE id = ?`,
+      record.decision,
+      record.decision,
+      sizeDelta,
+      sessionId,
+    );
+
+    await tx.runAsync(
+      `UPDATE daily_stats SET
+         reviewed = MAX(reviewed - 1, 0),
+         deleted = MAX(deleted - CASE WHEN ? = 'delete' THEN 1 ELSE 0 END, 0),
+         kept = MAX(kept - CASE WHEN ? = 'keep' THEN 1 ELSE 0 END, 0),
+         storage_saved_bytes = MAX(storage_saved_bytes - ?, 0),
+         synced_at = NULL
+       WHERE date = ?`,
+      record.decision,
+      record.decision,
+      sizeDelta,
+      date,
+    );
+  });
+  return true;
+}

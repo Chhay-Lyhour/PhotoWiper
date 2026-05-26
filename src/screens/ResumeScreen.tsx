@@ -1,7 +1,7 @@
 /**
  * ResumeScreen — incomplete session detected · Resume or Start Fresh
  */
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, useWindowDimensions,
 } from 'react-native';
@@ -9,15 +9,38 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types';
 import { Colors, Font, Radius, rw, rh, rf } from '../constants/theme';
+import { getQueueProgress } from '../services/photoQueue';
+import { getDeleteQueueIds, pauseSession } from '../services/swipeEngine';
 
 type Props = StackScreenProps<RootStackParamList, 'Resume'>;
 
-export default function ResumeScreen({ navigation }: Props) {
+export default function ResumeScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const { sessionId } = route.params;
+
+  const [photosLeft, setPhotosLeft] = useState(0);
+  const [markedToDelete, setMarkedToDelete] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [progress, deleteIds] = await Promise.all([
+        getQueueProgress(sessionId),
+        getDeleteQueueIds(sessionId),
+      ]);
+      if (cancelled) return;
+      setPhotosLeft(Math.max(progress.total - progress.reviewed, 0));
+      setMarkedToDelete(deleteIds.length);
+    })();
+    return () => { cancelled = true; };
+  }, [sessionId]);
 
   const handleResume = () => navigation.replace('MainTabs');
-  const handleFresh  = () => navigation.replace('Loading');
+  const handleFresh  = async () => {
+    await pauseSession(sessionId);
+    navigation.replace('Loading');
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + rh(48), paddingBottom: insets.bottom + rh(24) }]}>
@@ -36,12 +59,12 @@ export default function ResumeScreen({ navigation }: Props) {
         <View style={[styles.card, { width: width - rw(40) }]}>
           <View style={styles.cardRow}>
             <Text style={[styles.cardLabel, { fontSize: rf(13) }]}>PHOTOS LEFT</Text>
-            <Text style={[styles.cardValue, { fontSize: rf(22), color: Colors.purple2 }]}>34</Text>
+            <Text style={[styles.cardValue, { fontSize: rf(22), color: Colors.purple2 }]}>{photosLeft}</Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.cardRow}>
             <Text style={[styles.cardLabel, { fontSize: rf(13) }]}>MARKED TO DELETE</Text>
-            <Text style={[styles.cardValue, { fontSize: rf(22), color: Colors.delete }]}>8</Text>
+            <Text style={[styles.cardValue, { fontSize: rf(22), color: Colors.delete }]}>{markedToDelete}</Text>
           </View>
         </View>
 

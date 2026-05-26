@@ -8,7 +8,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -20,38 +20,63 @@ import Animated, {
   Extrapolation,
   runOnJS,
 } from 'react-native-reanimated';
-import type { RootStackParamList } from '../types';
+import type { RootStackParamList, Photo } from '../types';
 import { Colors, Font, Radius, Card, SCREEN, rw, rh, rf } from '../constants/theme';
-import { useStore } from '../store/useStore';
+import { getActiveSessionId, getUpcomingPhotos, getQueueProgress, startSession } from '../services/photoQueue';
+import { commitSwipe, undoLastSwipe, getDeleteQueueIds } from '../services/swipeEngine';
 
 type Nav = StackNavigationProp<RootStackParamList>;
 
-// ── Mock photo data for Phase 1 UI ────────────────────────────────────────
-const MOCK_PHOTOS = [
-  { id: '1', uri: 'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=800', filename: 'IMG_3800.jpg', fileSize: 5600000 },
-  { id: '2', uri: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800', filename: 'IMG_3801.jpg', fileSize: 4200000 },
-  { id: '3', uri: 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=800', filename: 'IMG_3802.jpg', fileSize: 3800000 },
-];
-const TOTAL = 24;
-
 const SWIPE_THRESHOLD = Card.swipeThreshold;
 const FLY_DISTANCE = SCREEN.W * 1.4;
+const PREFETCH_COUNT = 3;
 
 export default function SwipeScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
-  const { deleteQueue } = useStore();
 
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [queue, setQueue] = useState<Photo[]>([]);
   const [reviewed, setReviewed] = useState(0);
-  const [currentIdx, setCurrentIdx] = useState(0);
-  const isEmpty = currentIdx >= MOCK_PHOTOS.length;
+  const [total, setTotal] = useState(0);
+  const [deleteCount, setDeleteCount] = useState(0);
 
-  const progressFraction = reviewed / TOTAL;
-  const deleteCount = deleteQueue.length;
+  const progressFraction = total > 0 ? reviewed / total : 0;
+  const isEmpty = queue.length === 0;
+  const photo = queue[0] ?? null;
 
-  // Shared values for drag
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
+
+  const refreshDeleteCount = useCallback(async (sid: string) => {
+    const ids = await getDeleteQueueIds(sid);
+    setDeleteCount(ids.length);
+  }, []);
+
+  const refreshQueue = useCallback(async (sid: string) => {
+    const [next, progress] = await Promise.all([
+      getUpcomingPhotos(sid, PREFETCH_COUNT),
+      getQueueProgress(sid),
+    ]);
+    setQueue(next);
+    setReviewed(progress.reviewed);
+    setTotal(progress.total);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        let sid = await getActiveSessionId();
+        if (!sid) sid = await startSession();
+        if (cancelled) return;
+        setSessionId(sid);
+        await refreshQueue(sid);
+        await refreshDeleteCount(sid);
+      })();
+      return () => { cancelled = true; };
+    }, [refreshQueue, refreshDeleteCount]),
+  );
 
   const resetCard = useCallback(() => {
     translateX.value = 0;
@@ -59,24 +84,42 @@ export default function SwipeScreen() {
   }, [translateX, translateY]);
 
   const commitKeep = useCallback(() => {
+    if (!sessionId || !photo) return;
+    const sid = sessionId;
+    const pid = photo.id;
+    const size = photo.fileSize;
+    setQueue((q) => q.slice(1));
     setReviewed((r) => r + 1);
-    setCurrentIdx((i) => i + 1);
     resetCard();
-  }, [resetCard]);
+    (async () => {
+      await commitSwipe(sid, pid, 'keep', size);
+      await refreshQueue(sid);
+    })().catch((e) => console.warn('[commitKeep]', e));
+  }, [sessionId, photo, resetCard, refreshQueue]);
 
   const commitDelete = useCallback(() => {
+    if (!sessionId || !photo) return;
+    const sid = sessionId;
+    const pid = photo.id;
+    const size = photo.fileSize;
+    setQueue((q) => q.slice(1));
     setReviewed((r) => r + 1);
-    setCurrentIdx((i) => i + 1);
+    setDeleteCount((c) => c + 1);
     resetCard();
-  }, [resetCard]);
+    (async () => {
+      await commitSwipe(sid, pid, 'delete', size);
+      await refreshQueue(sid);
+    })().catch((e) => console.warn('[commitDelete]', e));
+  }, [sessionId, photo, resetCard, refreshQueue]);
 
-  const handleUndo = () => {
-    if (currentIdx > 0) {
-      setCurrentIdx((i) => i - 1);
-      setReviewed((r) => Math.max(0, r - 1));
-      resetCard();
-    }
-  };
+  const handleUndo = useCallback(async () => {
+    if (!sessionId) return;
+    const restored = await undoLastSwipe(sessionId);
+    if (!restored) return;
+    await refreshQueue(sessionId);
+    await refreshDeleteCount(sessionId);
+    resetCard();
+  }, [sessionId, refreshQueue, refreshDeleteCount, resetCard]);
 
   const handleReview = () => navigation.navigate('Review');
 
@@ -153,8 +196,6 @@ export default function SwipeScreen() {
     ),
   }));
 
-  const photo = MOCK_PHOTOS[currentIdx] ?? null;
-
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       {/* ── Header ── */}
@@ -162,7 +203,7 @@ export default function SwipeScreen() {
         <View>
           <Text style={[styles.headerTitle, { fontSize: rf(28) }]}>Discover</Text>
           <Text style={[styles.headerSub, { fontSize: rf(14) }]}>
-            {reviewed} / {TOTAL} reviewed
+            {reviewed} / {total} reviewed
           </Text>
         </View>
         <TouchableOpacity
