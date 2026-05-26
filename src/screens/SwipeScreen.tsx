@@ -217,7 +217,7 @@ export default function SwipeScreen() {
                   {photo.filename}
                 </Text>
                 <Text style={[styles.captionHint, { fontSize: rf(13) }]}>
-                  Swipe right to keep · left to delete
+                  {photo.fileSize ? `${(photo.fileSize / 1_000_000).toFixed(1)} MB` : 'Size unknown'}
                 </Text>
               </View>
             </Animated.View>
