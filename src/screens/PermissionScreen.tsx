@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types';
 import { Colors, Font, Radius, rw, rh, rf } from '../constants/theme';
-import { requestPhotoPermission, isUsable } from '../services/permissions';
+import { requestPhotoPermission } from '../services/permissions';
 
 type Props = StackScreenProps<RootStackParamList, 'Permission'>;
 
@@ -30,18 +30,18 @@ export default function PermissionScreen({ navigation }: Props) {
   const { width } = useWindowDimensions();
   const [requesting, setRequesting] = useState(false);
 
+  // Demo mode: always proceed to Loading regardless of OS permission state.
+  // iOS only shows the native prompt once per install — after that the request
+  // returns silently with the cached answer. Bypassing the gate keeps the demo
+  // flow testable. Restore the real check when wiring up real photos.
   const handleAllow = async () => {
     if (requesting) return;
     setRequesting(true);
     try {
-      const result = await requestPhotoPermission();
-      if (isUsable(result.state)) {
-        navigation.replace('Loading');
-      } else {
-        navigation.replace('Denied');
-      }
+      await requestPhotoPermission().catch(() => {});
     } finally {
       setRequesting(false);
+      navigation.replace('Loading');
     }
   };
 

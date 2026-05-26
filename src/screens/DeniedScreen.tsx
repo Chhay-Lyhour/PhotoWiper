@@ -15,7 +15,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types';
 import { Colors, Font, Radius, rw, rh, rf } from '../constants/theme';
@@ -65,12 +65,6 @@ export default function DeniedScreen({ navigation }: Props) {
     return () => sub.remove();
   }, [runRecheck]);
 
-  // Also re-check whenever this screen regains focus
-  useFocusEffect(
-    useCallback(() => {
-      runRecheck(true);
-    }, [runRecheck]),
-  );
 
   const handleOpenSettings = () => {
     sentToSettings.current = true;
