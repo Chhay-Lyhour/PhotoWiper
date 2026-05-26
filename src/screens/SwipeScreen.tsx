@@ -18,8 +18,8 @@ import Animated, {
   withTiming,
   interpolate,
   Extrapolation,
+  runOnJS,
 } from 'react-native-reanimated';
-import { scheduleOnRN } from 'react-native-worklets';
 import type { RootStackParamList } from '../types';
 import { Colors, Font, Radius, Card, SCREEN, rw, rh, rf } from '../constants/theme';
 import { useStore } from '../store/useStore';
@@ -83,12 +83,14 @@ export default function SwipeScreen() {
   // Button-tap fly-offs
   const flyOffRight = () => {
     translateX.value = withTiming(FLY_DISTANCE, { duration: 220 }, (done) => {
-      if (done) scheduleOnRN(commitKeep);
+      'worklet';
+      if (done) runOnJS(commitKeep)();
     });
   };
   const flyOffLeft = () => {
     translateX.value = withTiming(-FLY_DISTANCE, { duration: 220 }, (done) => {
-      if (done) scheduleOnRN(commitDelete);
+      'worklet';
+      if (done) runOnJS(commitDelete)();
     });
   };
 
@@ -100,13 +102,16 @@ export default function SwipeScreen() {
       translateY.value = e.translationY * 0.25;
     })
     .onEnd((e) => {
+      'worklet';
       if (e.translationX > SWIPE_THRESHOLD) {
         translateX.value = withTiming(FLY_DISTANCE, { duration: 220 }, (done) => {
-          if (done) scheduleOnRN(commitKeep);
+          'worklet';
+          if (done) runOnJS(commitKeep)();
         });
       } else if (e.translationX < -SWIPE_THRESHOLD) {
         translateX.value = withTiming(-FLY_DISTANCE, { duration: 220 }, (done) => {
-          if (done) scheduleOnRN(commitDelete);
+          'worklet';
+          if (done) runOnJS(commitDelete)();
         });
       } else {
         translateX.value = withSpring(0, { damping: 14, stiffness: 140 });
