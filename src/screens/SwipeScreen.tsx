@@ -5,15 +5,16 @@
  */
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Image, useWindowDimensions,
+  View, Text, StyleSheet, TouchableOpacity, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { StackScreenProps } from '@react-navigation/stack';
+import { useNavigation } from '@react-navigation/native';
+import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types';
 import { Colors, Font, Radius, Card, rw, rh, rf } from '../constants/theme';
 import { useStore } from '../store/useStore';
 
-type Props = StackScreenProps<RootStackParamList, 'MainTabs'>;
+type Nav = StackNavigationProp<RootStackParamList>;
 
 // ── Mock photo data for Phase 1 UI ────────────────────────────────────────
 const MOCK_PHOTOS = [
@@ -23,9 +24,9 @@ const MOCK_PHOTOS = [
 ];
 const TOTAL = 24;
 
-export default function SwipeScreen({ navigation }: Props) {
+export default function SwipeScreen() {
+  const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
-  useWindowDimensions(); // reserved for responsive sizing
   const { deleteQueue } = useStore();
 
   // Phase 1: simple counter state (Phase 2 will use real gesture engine)
