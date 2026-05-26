@@ -50,7 +50,10 @@ export default function ReviewScreen({ navigation }: Props) {
     navigation.replace('Deleting');
   };
 
-  const CELL = (width - rw(40) - rw(8)) / 3; // 3 columns with 4px gap
+  // 3-column grid: padding (rw(20) each side) + 2 gaps of 4px between cells
+  const GRID_PADDING = rw(20);
+  const GRID_GAP = 4;
+  const CELL = Math.floor((width - GRID_PADDING * 2 - GRID_GAP * 2) / 3);
 
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
@@ -92,7 +95,10 @@ export default function ReviewScreen({ navigation }: Props) {
       {/* ── Photo grid ── */}
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.grid, { paddingHorizontal: rw(20), paddingBottom: rh(100) }]}
+        contentContainerStyle={[
+          styles.grid,
+          { paddingHorizontal: GRID_PADDING, paddingBottom: rh(100), gap: GRID_GAP },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {MOCK_DELETE.map((photo) => {
@@ -181,7 +187,7 @@ const styles = StyleSheet.create({
 
   // Grid
   scroll: { flex: 1 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: rw(4) },
+  grid: { flexDirection: 'row', flexWrap: 'wrap' },
   cell: { borderRadius: Radius.md, overflow: 'hidden', position: 'relative' },
   cellImage: { width: '100%', height: '100%' },
   cellRescued: { opacity: 0.3 },

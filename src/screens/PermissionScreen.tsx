@@ -3,7 +3,7 @@
  * Light lavender bg · purple photo icon · 3 checklist items · Allow / Not now
  * Design ref: Image 6
  */
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types';
 import { Colors, Font, Radius, rw, rh, rf } from '../constants/theme';
+import { requestPhotoPermission, isUsable } from '../services/permissions';
 
 type Props = StackScreenProps<RootStackParamList, 'Permission'>;
 
@@ -27,9 +28,24 @@ const CHECKS = [
 export default function PermissionScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const [requesting, setRequesting] = useState(false);
 
-  const handleAllow = () => navigation.replace('Loading');
-  const handleNotNow = () => {}; // stays on screen
+  const handleAllow = async () => {
+    if (requesting) return;
+    setRequesting(true);
+    try {
+      const result = await requestPhotoPermission();
+      if (isUsable(result.state)) {
+        navigation.replace('Loading');
+      } else {
+        navigation.replace('Denied');
+      }
+    } finally {
+      setRequesting(false);
+    }
+  };
+
+  const handleNotNow = () => navigation.replace('Denied');
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + rh(24), paddingBottom: insets.bottom + rh(16) }]}>
@@ -65,11 +81,18 @@ export default function PermissionScreen({ navigation }: Props) {
 
         {/* Allow button */}
         <TouchableOpacity
-          style={[styles.allowBtn, { width: width - rw(40), borderRadius: Radius.full }]}
+          style={[
+            styles.allowBtn,
+            { width: width - rw(40), borderRadius: Radius.full },
+            requesting && styles.allowBtnDisabled,
+          ]}
           onPress={handleAllow}
           activeOpacity={0.85}
+          disabled={requesting}
         >
-          <Text style={[styles.allowText, { fontSize: rf(17) }]}>Allow Access</Text>
+          <Text style={[styles.allowText, { fontSize: rf(17) }]}>
+            {requesting ? 'Requesting…' : 'Allow Access'}
+          </Text>
         </TouchableOpacity>
 
         {/* Not now */}
@@ -146,6 +169,9 @@ const styles = StyleSheet.create({
     paddingVertical: rh(18),
     alignItems: 'center',
     marginBottom: rh(12),
+  },
+  allowBtnDisabled: {
+    opacity: 0.6,
   },
   allowText: {
     color: Colors.white,

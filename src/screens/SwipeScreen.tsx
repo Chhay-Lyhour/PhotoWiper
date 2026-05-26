@@ -1,17 +1,27 @@
 /**
- * SwipeScreen — Core screen ⭐
- * Two states: active swiping · "All caught up" empty state
- * Design ref: Image 9 (active) + Image 12 (empty / all caught up)
+ * SwipeScreen — Core screen
+ * Drag-to-swipe card: left = delete, right = keep
+ * Two states: active swiping / "All caught up" empty state
  */
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  interpolate,
+  Extrapolation,
+} from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import type { RootStackParamList } from '../types';
-import { Colors, Font, Radius, Card, rw, rh, rf } from '../constants/theme';
+import { Colors, Font, Radius, Card, SCREEN, rw, rh, rf } from '../constants/theme';
 import { useStore } from '../store/useStore';
 
 type Nav = StackNavigationProp<RootStackParamList>;
@@ -24,12 +34,14 @@ const MOCK_PHOTOS = [
 ];
 const TOTAL = 24;
 
+const SWIPE_THRESHOLD = Card.swipeThreshold;
+const FLY_DISTANCE = SCREEN.W * 1.4;
+
 export default function SwipeScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const { deleteQueue } = useStore();
 
-  // Phase 1: simple counter state (Phase 2 will use real gesture engine)
   const [reviewed, setReviewed] = useState(0);
   const [currentIdx, setCurrentIdx] = useState(0);
   const isEmpty = currentIdx >= MOCK_PHOTOS.length;
@@ -37,24 +49,104 @@ export default function SwipeScreen() {
   const progressFraction = reviewed / TOTAL;
   const deleteCount = deleteQueue.length;
 
-  const handleKeep = () => {
-    setReviewed((r) => r + 1);
-    setCurrentIdx((i) => i + 1);
-  };
+  // Shared values for drag
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
 
-  const handleDelete = () => {
+  const resetCard = useCallback(() => {
+    translateX.value = 0;
+    translateY.value = 0;
+  }, [translateX, translateY]);
+
+  const commitKeep = useCallback(() => {
     setReviewed((r) => r + 1);
     setCurrentIdx((i) => i + 1);
-  };
+    resetCard();
+  }, [resetCard]);
+
+  const commitDelete = useCallback(() => {
+    setReviewed((r) => r + 1);
+    setCurrentIdx((i) => i + 1);
+    resetCard();
+  }, [resetCard]);
 
   const handleUndo = () => {
     if (currentIdx > 0) {
       setCurrentIdx((i) => i - 1);
       setReviewed((r) => Math.max(0, r - 1));
+      resetCard();
     }
   };
 
   const handleReview = () => navigation.navigate('Review');
+
+  // Button-tap fly-offs
+  const flyOffRight = () => {
+    translateX.value = withTiming(FLY_DISTANCE, { duration: 220 }, (done) => {
+      if (done) scheduleOnRN(commitKeep);
+    });
+  };
+  const flyOffLeft = () => {
+    translateX.value = withTiming(-FLY_DISTANCE, { duration: 220 }, (done) => {
+      if (done) scheduleOnRN(commitDelete);
+    });
+  };
+
+  // Pan gesture
+  const pan = Gesture.Pan()
+    .activeOffsetX([-10, 10])
+    .onUpdate((e) => {
+      translateX.value = e.translationX;
+      translateY.value = e.translationY * 0.25;
+    })
+    .onEnd((e) => {
+      if (e.translationX > SWIPE_THRESHOLD) {
+        translateX.value = withTiming(FLY_DISTANCE, { duration: 220 }, (done) => {
+          if (done) scheduleOnRN(commitKeep);
+        });
+      } else if (e.translationX < -SWIPE_THRESHOLD) {
+        translateX.value = withTiming(-FLY_DISTANCE, { duration: 220 }, (done) => {
+          if (done) scheduleOnRN(commitDelete);
+        });
+      } else {
+        translateX.value = withSpring(0, { damping: 14, stiffness: 140 });
+        translateY.value = withSpring(0, { damping: 14, stiffness: 140 });
+      }
+    });
+
+  const cardAnimatedStyle = useAnimatedStyle(() => {
+    const rotate = interpolate(
+      translateX.value,
+      [-SCREEN.W, 0, SCREEN.W],
+      [-Card.rotationFactor, 0, Card.rotationFactor],
+      Extrapolation.CLAMP,
+    );
+    return {
+      transform: [
+        { translateX: translateX.value },
+        { translateY: translateY.value },
+        { rotate: `${rotate}deg` },
+      ],
+    };
+  });
+
+  const keepOverlayStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      translateX.value,
+      [0, SWIPE_THRESHOLD],
+      [0, 1],
+      Extrapolation.CLAMP,
+    ),
+  }));
+
+  const deleteOverlayStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      translateX.value,
+      [-SWIPE_THRESHOLD, 0],
+      [1, 0],
+      Extrapolation.CLAMP,
+    ),
+  }));
 
   const photo = MOCK_PHOTOS[currentIdx] ?? null;
 
@@ -68,7 +160,6 @@ export default function SwipeScreen() {
             {reviewed} / {TOTAL} reviewed
           </Text>
         </View>
-        {/* Delete queue badge button */}
         <TouchableOpacity
           style={[styles.badgeBtn, { width: rw(52), height: rw(52), borderRadius: Radius.xl }]}
           onPress={handleReview}
@@ -91,25 +182,42 @@ export default function SwipeScreen() {
       {/* ── Card area ── */}
       <View style={styles.cardArea}>
         {!isEmpty && photo ? (
-          // Active swipe card
-          <View style={[styles.card, { width: Card.width, borderRadius: Card.radius }]}>
-            <Image
-              source={{ uri: photo.uri }}
-              style={styles.cardImage}
-              resizeMode="cover"
-            />
-            {/* Bottom caption */}
-            <View style={styles.cardCaption}>
-              <Text style={[styles.captionFilename, { fontSize: rf(15) }]}>
-                {photo.filename}
-              </Text>
-              <Text style={[styles.captionHint, { fontSize: rf(13) }]}>
-                Swipe right to keep · left to delete
-              </Text>
-            </View>
-          </View>
+          <GestureDetector gesture={pan}>
+            <Animated.View
+              style={[
+                styles.card,
+                { width: Card.width, borderRadius: Card.radius },
+                cardAnimatedStyle,
+              ]}
+            >
+              <Image
+                source={{ uri: photo.uri }}
+                style={styles.cardImage}
+                resizeMode="cover"
+              />
+
+              {/* KEEP overlay (right swipe) */}
+              <Animated.View style={[styles.overlay, styles.overlayKeep, keepOverlayStyle]}>
+                <Text style={[styles.overlayText, { fontSize: rf(36) }]}>KEEP</Text>
+              </Animated.View>
+
+              {/* DELETE overlay (left swipe) */}
+              <Animated.View style={[styles.overlay, styles.overlayDelete, deleteOverlayStyle]}>
+                <Text style={[styles.overlayText, { fontSize: rf(36) }]}>DELETE</Text>
+              </Animated.View>
+
+              {/* Bottom caption */}
+              <View style={styles.cardCaption}>
+                <Text style={[styles.captionFilename, { fontSize: rf(15) }]}>
+                  {photo.filename}
+                </Text>
+                <Text style={[styles.captionHint, { fontSize: rf(13) }]}>
+                  Swipe right to keep · left to delete
+                </Text>
+              </View>
+            </Animated.View>
+          </GestureDetector>
         ) : (
-          // Empty / all caught up state
           <View style={[styles.emptyCard, { width: Card.width, borderRadius: Card.radius }]}>
             <Text style={[styles.emptyEmoji, { fontSize: rf(44) }]}>✦✦{'\n'}✦</Text>
             <Text style={[styles.emptyTitle, { fontSize: rf(24) }]}>All caught up</Text>
@@ -133,17 +241,15 @@ export default function SwipeScreen() {
 
       {/* ── Action buttons ── */}
       <View style={styles.actions}>
-        {/* Delete (X) */}
         <TouchableOpacity
           style={[styles.actionBtn, { width: rw(64), height: rw(64), borderRadius: Radius.full }]}
-          onPress={handleDelete}
+          onPress={flyOffLeft}
           activeOpacity={0.8}
           disabled={isEmpty}
         >
           <Text style={[styles.actionX, { fontSize: rf(24) }]}>✕</Text>
         </TouchableOpacity>
 
-        {/* Undo */}
         <TouchableOpacity
           style={[styles.actionBtn, { width: rw(52), height: rw(52), borderRadius: Radius.full }]}
           onPress={handleUndo}
@@ -152,10 +258,9 @@ export default function SwipeScreen() {
           <Text style={[styles.actionUndo, { fontSize: rf(20) }]}>↺</Text>
         </TouchableOpacity>
 
-        {/* Keep (heart) */}
         <TouchableOpacity
           style={[styles.actionBtnPrimary, { width: rw(64), height: rw(64), borderRadius: Radius.full }]}
-          onPress={handleKeep}
+          onPress={flyOffRight}
           activeOpacity={0.8}
           disabled={isEmpty}
         >
@@ -242,6 +347,25 @@ const styles = StyleSheet.create({
   },
   captionFilename: { color: Colors.white, fontWeight: Font.semibold },
   captionHint: { color: 'rgba(255,255,255,0.72)', marginTop: rh(2) },
+
+  // Swipe overlays
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  overlayKeep: { backgroundColor: Colors.overlayKeep },
+  overlayDelete: { backgroundColor: Colors.overlayDelete },
+  overlayText: {
+    color: Colors.white,
+    fontWeight: Font.extrabold,
+    letterSpacing: 3,
+    borderWidth: 4,
+    borderColor: Colors.white,
+    borderRadius: Radius.md,
+    paddingHorizontal: rw(20),
+    paddingVertical: rh(8),
+  },
 
   // Empty state card
   emptyCard: {
