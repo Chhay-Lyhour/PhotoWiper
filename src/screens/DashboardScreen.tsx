@@ -2,28 +2,81 @@
  * DashboardScreen (Stats tab) — hero storage card · 3 chips · weekly bar chart
  * Design ref: Image 11
  */
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Colors, Font, Radius, rw, rh, rf } from '../constants/theme';
+import { getLifetimeTotals, getDailyStats, type LifetimeTotals } from '../services/analyticsService';
+import type { DailyStats } from '../types';
 
-// ── Mock data ─────────────────────────────────────────────────────────────
-const MOCK_STATS = { kept: 15, deleted: 9, sessions: 3, storageMB: 37.5, reviewed: 24 };
-const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-const CHART_VALS = [0, 12, 8, 0, 37.5, 0, 0]; // MB per day
+const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
-const today = new Date();
-const dateStr = today.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }).toUpperCase();
+function ymd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function buildWeekSeries(stats: DailyStats[]): { day: string; mb: number; date: string }[] {
+  const map = new Map(stats.map((s) => [s.date, s]));
+  const out: { day: string; mb: number; date: string }[] = [];
+  const today = new Date();
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const key = ymd(d);
+    const s = map.get(key);
+    out.push({
+      day: DAY_LABELS[d.getDay()],
+      mb: s ? s.storageSavedBytes / 1_000_000 : 0,
+      date: key,
+    });
+  }
+  return out;
+}
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
-  const maxVal = Math.max(...CHART_VALS, 1);
+  const [totals, setTotals] = useState<LifetimeTotals>({
+    totalReviewed: 0, totalDeleted: 0, totalKept: 0, totalSavedBytes: 0, sessionCount: 0,
+  });
+  const [week, setWeek] = useState<{ day: string; mb: number; date: string }[]>(buildWeekSeries([]));
+  const [todayStats, setTodayStats] = useState<DailyStats | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        const [lifetime, daily] = await Promise.all([
+          getLifetimeTotals(),
+          getDailyStats(7),
+        ]);
+        if (cancelled) return;
+        setTotals(lifetime);
+        setWeek(buildWeekSeries(daily));
+        const todayKey = ymd(new Date());
+        setTodayStats(daily.find((s) => s.date === todayKey) ?? null);
+      })();
+      return () => { cancelled = true; };
+    }, []),
+  );
+
+  const today = new Date();
+  const dateStr = today.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }).toUpperCase();
+
+  const chartVals = week.map((w) => w.mb);
+  const maxVal = Math.max(...chartVals, 1);
   const chartH = rh(80);
-  const barW   = (width - rw(40) - rw(60)) / 7 - rw(4); // 7 columns
+  const barW   = (width - rw(40) - rw(60)) / 7 - rw(4);
+
+  const storageMB = (totals.totalSavedBytes / 1_000_000).toFixed(1);
+  const reviewedToday = todayStats?.reviewed ?? 0;
 
   return (
     <ScrollView
@@ -42,28 +95,28 @@ export default function DashboardScreen() {
       <View style={[styles.heroCard, { width: width - rw(40), borderRadius: Radius.xl }]}>
         <Text style={[styles.heroLabel, { fontSize: rf(12) }]}>STORAGE FREED</Text>
         <View style={styles.heroAmountRow}>
-          <Text style={[styles.heroAmount, { fontSize: rf(52) }]}>{MOCK_STATS.storageMB}</Text>
+          <Text style={[styles.heroAmount, { fontSize: rf(52) }]}>{storageMB}</Text>
           <Text style={[styles.heroUnit, { fontSize: rf(22) }]}> MB</Text>
           <View style={{ flex: 1 }} />
           <Text style={[styles.trendIcon, { fontSize: rf(22) }]}>↗</Text>
         </View>
         <Text style={[styles.heroSub, { fontSize: rf(14) }]}>
-          {MOCK_STATS.reviewed} photos reviewed today
+          {reviewedToday} photos reviewed today
         </Text>
       </View>
 
       {/* ── Three chips ── */}
       <View style={[styles.chipsRow, { width: width - rw(40) }]}>
         <View style={[styles.chip, { borderRadius: Radius.lg }]}>
-          <Text style={[styles.chipNum, { fontSize: rf(28), color: Colors.keep }]}>{MOCK_STATS.kept}</Text>
+          <Text style={[styles.chipNum, { fontSize: rf(28), color: Colors.keep }]}>{totals.totalKept}</Text>
           <Text style={[styles.chipLabel, { fontSize: rf(11) }]}>KEPT</Text>
         </View>
         <View style={[styles.chip, { borderRadius: Radius.lg }]}>
-          <Text style={[styles.chipNum, { fontSize: rf(28), color: Colors.delete }]}>{MOCK_STATS.deleted}</Text>
+          <Text style={[styles.chipNum, { fontSize: rf(28), color: Colors.delete }]}>{totals.totalDeleted}</Text>
           <Text style={[styles.chipLabel, { fontSize: rf(11) }]}>DELETED</Text>
         </View>
         <View style={[styles.chip, { borderRadius: Radius.lg }]}>
-          <Text style={[styles.chipNum, { fontSize: rf(28), color: Colors.purple2 }]}>{MOCK_STATS.sessions}</Text>
+          <Text style={[styles.chipNum, { fontSize: rf(28), color: Colors.purple2 }]}>{totals.sessionCount}</Text>
           <Text style={[styles.chipLabel, { fontSize: rf(11) }]}>SESSIONS</Text>
         </View>
       </View>
@@ -77,11 +130,11 @@ export default function DashboardScreen() {
 
         {/* Bars */}
         <View style={[styles.barsRow, { height: chartH, marginBottom: rh(8) }]}>
-          {CHART_VALS.map((val, i) => {
-            const barH = val > 0 ? (val / maxVal) * chartH : rh(4);
-            const isActive = val > 0;
+          {week.map((w) => {
+            const barH = w.mb > 0 ? (w.mb / maxVal) * chartH : rh(4);
+            const isActive = w.mb > 0;
             return (
-              <View key={i} style={[styles.barCol, { width: barW }]}>
+              <View key={w.date} style={[styles.barCol, { width: barW }]}>
                 <View style={[
                   styles.bar,
                   {
@@ -97,9 +150,9 @@ export default function DashboardScreen() {
 
         {/* Day labels */}
         <View style={styles.dayRow}>
-          {DAYS.map((d, i) => (
-            <View key={i} style={[styles.dayCol, { width: barW }]}>
-              <Text style={[styles.dayLabel, { fontSize: rf(12) }]}>{d}</Text>
+          {week.map((w) => (
+            <View key={w.date} style={[styles.dayCol, { width: barW }]}>
+              <Text style={[styles.dayLabel, { fontSize: rf(12) }]}>{w.day}</Text>
             </View>
           ))}
         </View>

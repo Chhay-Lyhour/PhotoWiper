@@ -2,29 +2,21 @@
  * ReviewScreen — photo grid of delete queue · tap to rescue · Confirm Delete
  * Design ref: Image 8
  */
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ScrollView, Image, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import type { StackScreenProps } from '@react-navigation/stack';
-import type { RootStackParamList } from '../types';
+import type { RootStackParamList, SwipeRecord } from '../types';
 import { Colors, Font, Radius, rw, rh, rf } from '../constants/theme';
-type Props = StackScreenProps<RootStackParamList, 'Review'>;
+import { getActiveSessionId } from '../services/photoQueue';
+import { getDeleteQueue, rescuePhoto } from '../services/swipeEngine';
+import { getSession } from '../services/analyticsService';
 
-// Mock delete-queue photos for Phase 1 UI
-const MOCK_DELETE = [
-  { id: '1', uri: 'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=400', fileSize: 5600000 },
-  { id: '2', uri: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400', fileSize: 5400000 },
-  { id: '3', uri: 'https://images.unsplash.com/photo-1547036967-23d11aacaee0?w=400', fileSize: 2200000 },
-  { id: '4', uri: 'https://images.unsplash.com/photo-1502767089025-6572583495b9?w=400', fileSize: 5600000 },
-  { id: '5', uri: 'https://images.unsplash.com/photo-1492106087820-71f1a00d2b11?w=400', fileSize: 5300000 },
-  { id: '6', uri: 'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=400', fileSize: 5000000 },
-  { id: '7', uri: 'https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=400', fileSize: 2900000 },
-  { id: '8', uri: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=400', fileSize: 1300000 },
-  { id: '9', uri: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400', fileSize: 4200000 },
-];
+type Props = StackScreenProps<RootStackParamList, 'Review'>;
 
 function formatMB(bytes: number) {
   const mb = bytes / 1_000_000;
@@ -35,18 +27,47 @@ export default function ReviewScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
-  // rescued = ids removed from delete queue
-  const [rescued, setRescued] = useState<Set<string>>(new Set());
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [deleteQueue, setDeleteQueue] = useState<SwipeRecord[]>([]);
+  const [keptCount, setKeptCount] = useState(0);
+  const [busy, setBusy] = useState(false);
 
-  const remaining = MOCK_DELETE.filter((p) => !rescued.has(p.id));
-  const totalBytes = remaining.reduce((s, p) => s + p.fileSize, 0);
-  const keptCount = 15; // mock
+  const loadQueue = useCallback(async () => {
+    const sid = await getActiveSessionId();
+    if (!sid) {
+      setDeleteQueue([]);
+      return;
+    }
+    setSessionId(sid);
+    const [queue, session] = await Promise.all([getDeleteQueue(sid), getSession(sid)]);
+    setDeleteQueue(queue);
+    setKeptCount(session?.keptCount ?? 0);
+  }, []);
 
-  const handleRescue = (id: string) => {
-    setRescued((prev) => new Set([...prev, id]));
+  useFocusEffect(
+    useCallback(() => {
+      loadQueue();
+    }, [loadQueue]),
+  );
+
+  const totalBytes = deleteQueue.reduce((s, p) => s + (p.fileSize ?? 0), 0);
+
+  const handleRescue = async (photoId: string) => {
+    if (!sessionId || busy) return;
+    setBusy(true);
+    setDeleteQueue((q) => q.filter((r) => r.photoId !== photoId));
+    try {
+      await rescuePhoto(sessionId, photoId);
+    } catch (e) {
+      console.warn('[rescue]', e);
+      await loadQueue();
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleConfirm = () => {
+    if (deleteQueue.length === 0) return;
     navigation.replace('Deleting');
   };
 
@@ -70,7 +91,7 @@ export default function ReviewScreen({ navigation }: Props) {
       <View style={[styles.statsRow, { paddingHorizontal: rw(20) }]}>
         <View style={[styles.statChip, { flex: 1 }]}>
           <Text style={[styles.statNum, { fontSize: rf(28), color: Colors.delete }]}>
-            {remaining.length}
+            {deleteQueue.length}
           </Text>
           <Text style={[styles.statLabel, { fontSize: rf(11) }]}>PHOTOS</Text>
         </View>
@@ -101,43 +122,39 @@ export default function ReviewScreen({ navigation }: Props) {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {MOCK_DELETE.map((photo) => {
-          const isRescued = rescued.has(photo.id);
-          return (
+        {deleteQueue.length === 0 ? (
+          <View style={styles.emptyWrap}>
+            <Text style={[styles.emptyText, { fontSize: rf(15) }]}>
+              No photos queued for deletion.
+            </Text>
+          </View>
+        ) : (
+          deleteQueue.map((photo) => (
             <TouchableOpacity
-              key={photo.id}
-              onPress={() => handleRescue(photo.id)}
+              key={photo.photoId}
+              onPress={() => handleRescue(photo.photoId)}
               activeOpacity={0.8}
+              disabled={busy}
               style={[styles.cell, { width: CELL, height: CELL * 1.15 }]}
             >
               <Image
                 source={{ uri: photo.uri }}
-                style={[styles.cellImage, isRescued && styles.cellRescued]}
+                style={styles.cellImage}
                 resizeMode="cover"
               />
-              {/* File size label */}
-              {!isRescued && (
+              {photo.fileSize !== undefined && (
                 <View style={styles.sizeTag}>
                   <Text style={[styles.sizeText, { fontSize: rf(11) }]}>
                     {formatMB(photo.fileSize)}
                   </Text>
                 </View>
               )}
-              {/* X badge */}
-              {!isRescued && (
-                <View style={[styles.xBadge, { width: rw(22), height: rw(22), borderRadius: Radius.full }]}>
-                  <Text style={[styles.xText, { fontSize: rf(12) }]}>✕</Text>
-                </View>
-              )}
-              {/* Rescued overlay */}
-              {isRescued && (
-                <View style={styles.rescuedOverlay}>
-                  <Text style={[styles.rescuedIcon, { fontSize: rf(28) }]}>♥</Text>
-                </View>
-              )}
+              <View style={[styles.xBadge, { width: rw(22), height: rw(22), borderRadius: Radius.full }]}>
+                <Text style={[styles.xText, { fontSize: rf(12) }]}>✕</Text>
+              </View>
             </TouchableOpacity>
-          );
-        })}
+          ))
+        )}
       </ScrollView>
 
       {/* ── Confirm button ── */}
@@ -146,10 +163,10 @@ export default function ReviewScreen({ navigation }: Props) {
           style={[styles.confirmBtn, { borderRadius: Radius.full }]}
           onPress={handleConfirm}
           activeOpacity={0.85}
-          disabled={remaining.length === 0}
+          disabled={deleteQueue.length === 0}
         >
           <Text style={[styles.confirmText, { fontSize: rf(17) }]}>
-            Confirm Delete ({remaining.length})
+            Confirm Delete ({deleteQueue.length})
           </Text>
         </TouchableOpacity>
       </View>
@@ -191,6 +208,8 @@ const styles = StyleSheet.create({
   cell: { borderRadius: Radius.md, overflow: 'hidden', position: 'relative' },
   cellImage: { width: '100%', height: '100%' },
   cellRescued: { opacity: 0.3 },
+  emptyWrap: { width: '100%', alignItems: 'center', justifyContent: 'center', paddingVertical: rh(40) },
+  emptyText: { color: Colors.textSecondary },
   sizeTag: {
     position: 'absolute',
     bottom: rh(6),
