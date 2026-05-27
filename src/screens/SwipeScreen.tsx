@@ -3,7 +3,7 @@
  * Drag-to-swipe card: left = delete, right = keep
  * Two states: active swiping / "All caught up" empty state
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
 } from 'react-native';
@@ -20,6 +20,7 @@ import Animated, {
   interpolate,
   Extrapolation,
   runOnJS,
+  cancelAnimation,
 } from 'react-native-reanimated';
 import type { RootStackParamList, Photo } from '../types';
 import { Colors, Font, Radius, Card, SCREEN, rw, rh, rf } from '../constants/theme';
