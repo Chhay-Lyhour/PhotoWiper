@@ -5,8 +5,9 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, Image, useWindowDimensions,
+  ScrollView, useWindowDimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import type { StackScreenProps } from '@react-navigation/stack';
@@ -140,7 +141,8 @@ export default function ReviewScreen({ navigation }: Props) {
               <Image
                 source={{ uri: photo.uri }}
                 style={styles.cellImage}
-                resizeMode="cover"
+                contentFit="cover"
+                cachePolicy="memory-disk"
               />
               {photo.fileSize !== undefined && (
                 <View style={styles.sizeTag}>
