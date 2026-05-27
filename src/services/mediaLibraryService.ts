@@ -1,4 +1,5 @@
 import * as MediaLibrary from 'expo-media-library';
+import * as FileSystem from 'expo-file-system';
 import type { Photo } from '../types';
 
 const PAGE_SIZE = 200;
@@ -63,8 +64,9 @@ export async function getAssetInfo(id: string) {
 
 /**
  * MediaLibrary.getAssetsAsync() does not return fileSize on iOS — only
- * getAssetInfoAsync(id) does. Use this to backfill sizes for photos that
- * still have fileSize === undefined (typically the next few in the queue).
+ * getAssetInfoAsync(id) does. Falls back to FileSystem.getInfoAsync on the
+ * localUri if getAssetInfoAsync doesn't populate the size (e.g. iCloud-backed
+ * photos that haven't been downloaded yet).
  *
  * Runs all lookups in parallel. Any individual failure leaves that photo's
  * fileSize untouched (caller's responsibility to handle undefined).
@@ -72,12 +74,27 @@ export async function getAssetInfo(id: string) {
 export async function enrichWithFileSize(photos: Photo[]): Promise<Photo[]> {
   return Promise.all(
     photos.map(async (p) => {
-      if (p.fileSize !== undefined) return p;
+      if (p.fileSize != null && p.fileSize > 0) return p;
       try {
-        const info = await MediaLibrary.getAssetInfoAsync(p.id);
-        // fileSize is reported in bytes on both iOS and Android by expo-media-library
-        const size = (info as { fileSize?: number }).fileSize;
-        return size !== undefined ? { ...p, fileSize: size } : p;
+        // AssetInfo does have fileSize at runtime but the SDK 54 types omit it
+        const info = await MediaLibrary.getAssetInfoAsync(p.id) as MediaLibrary.AssetInfo & { fileSize?: number };
+
+        // Primary: fileSize from MediaLibrary (bytes, available when asset is local)
+        if (info.fileSize != null && info.fileSize > 0) {
+          return { ...p, fileSize: info.fileSize };
+        }
+
+        // Fallback: measure the local file directly via FileSystem
+        const uri = info.localUri ?? p.uri;
+        if (uri) {
+          // expo-file-system v19 returns size directly without needing an option flag
+          const fileInfo = await FileSystem.getInfoAsync(uri);
+          if (fileInfo.exists && 'size' in fileInfo && (fileInfo.size as number) > 0) {
+            return { ...p, fileSize: fileInfo.size as number };
+          }
+        }
+
+        return p;
       } catch {
         return p;
       }
