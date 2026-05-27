@@ -3,9 +3,10 @@
  * Drag-to-swipe card: left = delete, right = keep
  * Two states: active swiping / "All caught up" empty state
  */
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
+  Animated as RNAnimated, Easing,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -56,6 +57,22 @@ export default function SwipeScreen() {
 
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
+
+  // Back-card stack rise: 0 = resting (cards at offset positions), 1 = risen
+  // one slot (card1 → front, card2 → middle). Driven by RN's Animated (not
+  // Reanimated) because it's purely JS-thread one-shot — no worklet, no
+  // subscription to gesture, so it sidesteps the Expo Go native crash we hit
+  // when useAnimatedStyle was used on back cards.
+  const stackProgress = useRef(new RNAnimated.Value(0)).current;
+
+  const startStackRise = useCallback(() => {
+    RNAnimated.timing(stackProgress, {
+      toValue: 1,
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [stackProgress]);
 
   const refreshDeleteCount = useCallback(async (sid: string) => {
     const ids = await getDeleteQueueIds(sid);
@@ -122,9 +139,12 @@ export default function SwipeScreen() {
   // Ghost-image fix: reset card position only AFTER React swaps in the new
   // photo. Calling resetCard() inside commitKeep/commitDelete caused the old
   // photo to snap back to centre for one frame before the next photo appeared.
+  // Also resets stackProgress so the new back cards start at their resting
+  // offsets (matching where the previous ones landed at progress=1).
   useEffect(() => {
     translateX.value = 0;
     translateY.value = 0;
+    stackProgress.setValue(0);
   }, [photo?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const commitKeep = useCallback(() => {
@@ -169,12 +189,14 @@ export default function SwipeScreen() {
 
   // Button-tap fly-offs
   const flyOffRight = () => {
+    startStackRise();
     translateX.value = withTiming(FLY_DISTANCE, { duration: 220 }, (done) => {
       'worklet';
       if (done) runOnJS(commitKeep)();
     });
   };
   const flyOffLeft = () => {
+    startStackRise();
     translateX.value = withTiming(-FLY_DISTANCE, { duration: 220 }, (done) => {
       'worklet';
       if (done) runOnJS(commitDelete)();
@@ -191,11 +213,13 @@ export default function SwipeScreen() {
     .onEnd((e) => {
       'worklet';
       if (e.translationX > SWIPE_THRESHOLD) {
+        runOnJS(startStackRise)();
         translateX.value = withTiming(FLY_DISTANCE, { duration: 220 }, (done) => {
           'worklet';
           if (done) runOnJS(commitKeep)();
         });
       } else if (e.translationX < -SWIPE_THRESHOLD) {
+        runOnJS(startStackRise)();
         translateX.value = withTiming(-FLY_DISTANCE, { duration: 220 }, (done) => {
           'worklet';
           if (done) runOnJS(commitDelete)();
@@ -240,16 +264,52 @@ export default function SwipeScreen() {
     ),
   }));
 
-  // STATIC stacked-card transforms — using useAnimatedStyle for the back
-  // cards caused Expo Go iOS to native-crash on screen mount. Static styles
-  // give the same visual "deck" effect, just without the rise-on-drag.
-  const card1BehindStaticStyle = {
-    transform: [{ scale: 0.92 }, { translateY: rh(36) }],
-    opacity: 0.9,
+  // Back-card animated styles — interpolate stackProgress so each back card
+  // smoothly rises one slot when a swipe commits:
+  //   card1 (middle):  scale 0.92→1.00,  translateY rh(36)→0,    opacity 0.90→1.00
+  //   card2 (deepest): scale 0.85→0.92, translateY rh(64)→rh(36), opacity 0.75→0.90
+  // Once the queue slices and photo.id changes, stackProgress resets to 0,
+  // and the new card1/card2 land at the resting offsets (= same pixel position
+  // they animated to at progress=1), so there's no visual jump.
+  const card1BehindAnimatedStyle = {
+    transform: [
+      {
+        scale: stackProgress.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0.92, 1],
+        }),
+      },
+      {
+        translateY: stackProgress.interpolate({
+          inputRange: [0, 1],
+          outputRange: [rh(36), 0],
+        }),
+      },
+    ],
+    opacity: stackProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.9, 1],
+    }),
   };
-  const card2BehindStaticStyle = {
-    transform: [{ scale: 0.85 }, { translateY: rh(64) }],
-    opacity: 0.75,
+  const card2BehindAnimatedStyle = {
+    transform: [
+      {
+        scale: stackProgress.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0.85, 0.92],
+        }),
+      },
+      {
+        translateY: stackProgress.interpolate({
+          inputRange: [0, 1],
+          outputRange: [rh(64), rh(36)],
+        }),
+      },
+    ],
+    opacity: stackProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.75, 0.9],
+    }),
   };
 
   return (
@@ -287,32 +347,32 @@ export default function SwipeScreen() {
           // 3-layer stack: card[2] deepest → card[1] middle → card[0] front
           <View style={[styles.cardStack, { width: Card.width, height: Card.height + rh(80) }]}>
 
-            {/* Card 2 — deepest (photo[2]) — plain View, static transform */}
+            {/* Card 2 — deepest (photo[2]) — animates one slot forward on commit */}
             {queue[2] && (
-              <View
+              <RNAnimated.View
                 style={[styles.card, styles.cardBehind,
                   { width: Card.width, borderRadius: Card.radius },
-                  card2BehindStaticStyle,
+                  card2BehindAnimatedStyle,
                 ]}
                 pointerEvents="none"
               >
                 <Image source={{ uri: queue[2].uri }} style={styles.cardImage}
                   contentFit="cover" cachePolicy="memory" />
-              </View>
+              </RNAnimated.View>
             )}
 
-            {/* Card 1 — middle (photo[1]) — plain View, static transform */}
+            {/* Card 1 — middle (photo[1]) — animates up to front on commit */}
             {queue[1] && (
-              <View
+              <RNAnimated.View
                 style={[styles.card, styles.cardBehind,
                   { width: Card.width, borderRadius: Card.radius },
-                  card1BehindStaticStyle,
+                  card1BehindAnimatedStyle,
                 ]}
                 pointerEvents="none"
               >
                 <Image source={{ uri: queue[1].uri }} style={styles.cardImage}
                   contentFit="cover" cachePolicy="memory" />
-              </View>
+              </RNAnimated.View>
             )}
 
             {/* Card 0 — front (photo[0], swipeable) */}
