@@ -13,6 +13,7 @@ import { Colors, Font, Radius, rw, rh, rf } from '../constants/theme';
 import { getActiveSessionId } from '../services/photoQueue';
 import { getDeleteQueueIds, completeSession } from '../services/swipeEngine';
 import { deletePhotos } from '../services/mediaLibraryService';
+import { syncAll } from '../services/syncService';
 
 type Props = StackScreenProps<RootStackParamList, 'Deleting'>;
 
@@ -49,6 +50,7 @@ export default function DeletingScreen({ navigation }: Props) {
 
       if (ids.length === 0) {
         const stats = await completeSession(sid);
+        syncAll(); // fire-and-forget; fails silently
         if (!cancelled) navigation.replace('AllDone', { stats });
         return;
       }
@@ -83,6 +85,7 @@ export default function DeletingScreen({ navigation }: Props) {
         Animated.timing(barAnim, { toValue: 1, duration: 200, useNativeDriver: false }).start();
 
         const stats = await completeSession(sid);
+        syncAll(); // fire-and-forget; fails silently
         if (!cancelled) {
           setTimeout(() => navigation.replace('AllDone', { stats }), 500);
         }
