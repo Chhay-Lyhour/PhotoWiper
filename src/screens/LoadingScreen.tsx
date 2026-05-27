@@ -11,11 +11,12 @@ import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types';
 import { Colors, Font, Radius, rw, rh, rf } from '../constants/theme';
 import { useStore } from '../store/useStore';
+import { indexLibrary } from '../services/photoQueue';
+import { startSession } from '../services/photoQueue';
 
 type Props = StackScreenProps<RootStackParamList, 'Loading'>;
 
 const STATUS_STEPS = ['Scanning your gallery…', 'Shuffling your gallery…', 'Almost ready…'];
-const MOCK_TOTAL = 2660;
 
 export default function LoadingScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
@@ -31,35 +32,47 @@ export default function LoadingScreen({ navigation }: Props) {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     const store = useStore.getState();
     store.setLoadingCount(0);
     store.setLoadingStatus(STATUS_STEPS[0]);
     store.setLoadingProgress(0);
 
-    let step = 0;
-    let count = 0;
+    (async () => {
+      try {
+        const total = await indexLibrary(({ fetched, total }) => {
+          if (cancelled) return;
+          const s = useStore.getState();
+          s.setLoadingCount(fetched);
+          const p = total > 0 ? Math.min(fetched / total, 0.85) : 0;
+          s.setLoadingProgress(p);
+          Animated.timing(barAnim, { toValue: p, duration: 150, useNativeDriver: false }).start();
+          if (fetched / Math.max(total, 1) > 0.3 && s.loadingStatus === STATUS_STEPS[0]) {
+            s.setLoadingStatus(STATUS_STEPS[1]);
+          }
+        });
 
-    const countTimer = setInterval(() => {
-      count = Math.min(count + Math.floor(Math.random() * 140 + 60), MOCK_TOTAL);
-      store.setLoadingCount(count);
-      if (count >= MOCK_TOTAL) clearInterval(countTimer);
-    }, 70);
+        if (cancelled) return;
+        useStore.getState().setLoadingStatus(STATUS_STEPS[2]);
+        Animated.timing(barAnim, { toValue: 0.95, duration: 200, useNativeDriver: false }).start();
 
-    const progressTimer = setInterval(() => {
-      step++;
-      const p = Math.min(step / 20, 1);
-      store.setLoadingProgress(p);
-      Animated.timing(barAnim, { toValue: p, duration: 250, useNativeDriver: false }).start();
-      if (step === 6) store.setLoadingStatus(STATUS_STEPS[1]);
-      if (step === 14) store.setLoadingStatus(STATUS_STEPS[2]);
-      if (p >= 1) {
-        clearInterval(progressTimer);
-        clearInterval(countTimer);
-        setTimeout(() => navigation.replace('MainTabs'), 500);
+        await startSession();
+        if (cancelled) return;
+
+        Animated.timing(barAnim, { toValue: 1, duration: 200, useNativeDriver: false }).start();
+        useStore.getState().setLoadingProgress(1);
+        useStore.getState().setLoadingCount(total);
+
+        setTimeout(() => {
+          if (!cancelled) navigation.replace('MainTabs');
+        }, 400);
+      } catch (err) {
+        console.warn('[Loading] indexLibrary failed:', err);
+        if (!cancelled) navigation.replace('Denied');
       }
-    }, 250);
+    })();
 
-    return () => { clearInterval(countTimer); clearInterval(progressTimer); };
+    return () => { cancelled = true; };
   }, []);
 
   const barWidth = barAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
