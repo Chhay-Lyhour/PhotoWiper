@@ -20,7 +20,6 @@ import Animated, {
   interpolate,
   Extrapolation,
   runOnJS,
-  cancelAnimation,
 } from 'react-native-reanimated';
 import type { RootStackParamList, Photo } from '../types';
 import { Colors, Font, Radius, Card, SCREEN, rw, rh, rf } from '../constants/theme';
@@ -120,6 +119,14 @@ export default function SwipeScreen() {
     translateY.value = 0;
   }, [translateX, translateY]);
 
+  // Ghost-image fix: reset card position only AFTER React swaps in the new
+  // photo. Calling resetCard() inside commitKeep/commitDelete caused the old
+  // photo to snap back to centre for one frame before the next photo appeared.
+  useEffect(() => {
+    translateX.value = 0;
+    translateY.value = 0;
+  }, [photo?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const commitKeep = useCallback(() => {
     if (!sessionId || !photo) return;
     const sid = sessionId;
@@ -127,12 +134,12 @@ export default function SwipeScreen() {
     const size = photo.fileSize;
     setQueue((q) => q.slice(1));
     setReviewed((r) => r + 1);
-    resetCard();
+    // resetCard() removed — useEffect above handles position reset on photo change.
     (async () => {
       await commitSwipe(sid, pid, 'keep', size);
       await refreshQueue(sid);
     })().catch((e) => console.warn('[commitKeep]', e));
-  }, [sessionId, photo, resetCard, refreshQueue]);
+  }, [sessionId, photo, refreshQueue]);
 
   const commitDelete = useCallback(() => {
     if (!sessionId || !photo) return;
@@ -142,12 +149,12 @@ export default function SwipeScreen() {
     setQueue((q) => q.slice(1));
     setReviewed((r) => r + 1);
     setDeleteCount((c) => c + 1);
-    resetCard();
+    // resetCard() removed — useEffect above handles position reset on photo change.
     (async () => {
       await commitSwipe(sid, pid, 'delete', size);
       await refreshQueue(sid);
     })().catch((e) => console.warn('[commitDelete]', e));
-  }, [sessionId, photo, resetCard, refreshQueue]);
+  }, [sessionId, photo, refreshQueue]);
 
   const handleUndo = useCallback(async () => {
     if (!sessionId) return;
@@ -233,6 +240,18 @@ export default function SwipeScreen() {
     ),
   }));
 
+  // STATIC stacked-card transforms — using useAnimatedStyle for the back
+  // cards caused Expo Go iOS to native-crash on screen mount. Static styles
+  // give the same visual "deck" effect, just without the rise-on-drag.
+  const card1BehindStaticStyle = {
+    transform: [{ scale: 0.92 }, { translateY: rh(36) }],
+    opacity: 0.9,
+  };
+  const card2BehindStaticStyle = {
+    transform: [{ scale: 0.85 }, { translateY: rh(64) }],
+    opacity: 0.75,
+  };
+
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       {/* ── Header ── */}
@@ -265,42 +284,76 @@ export default function SwipeScreen() {
       {/* ── Card area ── */}
       <View style={styles.cardArea}>
         {!isEmpty && photo ? (
-          <GestureDetector gesture={pan}>
-            <Animated.View
-              style={[
-                styles.card,
-                { width: Card.width, borderRadius: Card.radius },
-                cardAnimatedStyle,
-              ]}
-            >
-              <Image
-                source={{ uri: photo.uri }}
-                style={styles.cardImage}
-                contentFit="cover"
-                cachePolicy="memory-disk"
-              />
+          // 3-layer stack: card[2] deepest → card[1] middle → card[0] front
+          <View style={[styles.cardStack, { width: Card.width, height: Card.height + rh(80) }]}>
 
-              {/* KEEP overlay (right swipe) */}
-              <Animated.View style={[styles.overlay, styles.overlayKeep, keepOverlayStyle]}>
-                <Text style={[styles.overlayText, { fontSize: rf(36) }]}>KEEP</Text>
-              </Animated.View>
-
-              {/* DELETE overlay (left swipe) */}
-              <Animated.View style={[styles.overlay, styles.overlayDelete, deleteOverlayStyle]}>
-                <Text style={[styles.overlayText, { fontSize: rf(36) }]}>DELETE</Text>
-              </Animated.View>
-
-              {/* Bottom caption */}
-              <View style={styles.cardCaption}>
-                <Text style={[styles.captionFilename, { fontSize: rf(15) }]}>
-                  {photo.filename}
-                </Text>
-                <Text style={[styles.captionHint, { fontSize: rf(13) }]}>
-                  {photo.fileSize ? `${(photo.fileSize / 1_000_000).toFixed(1)} MB` : 'Size unknown'}
-                </Text>
+            {/* Card 2 — deepest (photo[2]) — plain View, static transform */}
+            {queue[2] && (
+              <View
+                style={[styles.card, styles.cardBehind,
+                  { width: Card.width, borderRadius: Card.radius },
+                  card2BehindStaticStyle,
+                ]}
+                pointerEvents="none"
+              >
+                <Image source={{ uri: queue[2].uri }} style={styles.cardImage}
+                  contentFit="cover" cachePolicy="memory" />
               </View>
-            </Animated.View>
-          </GestureDetector>
+            )}
+
+            {/* Card 1 — middle (photo[1]) — plain View, static transform */}
+            {queue[1] && (
+              <View
+                style={[styles.card, styles.cardBehind,
+                  { width: Card.width, borderRadius: Card.radius },
+                  card1BehindStaticStyle,
+                ]}
+                pointerEvents="none"
+              >
+                <Image source={{ uri: queue[1].uri }} style={styles.cardImage}
+                  contentFit="cover" cachePolicy="memory" />
+              </View>
+            )}
+
+            {/* Card 0 — front (photo[0], swipeable) */}
+            <GestureDetector gesture={pan}>
+              <Animated.View
+                style={[styles.card, styles.cardBehind,
+                  { width: Card.width, borderRadius: Card.radius },
+                  cardAnimatedStyle,
+                ]}
+              >
+                <Image
+                  source={{ uri: photo.uri }}
+                  style={styles.cardImage}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                />
+
+                {/* KEEP overlay (right swipe) */}
+                <Animated.View style={[styles.overlay, styles.overlayKeep, keepOverlayStyle]}>
+                  <Text style={[styles.overlayText, { fontSize: rf(36) }]}>KEEP</Text>
+                </Animated.View>
+
+                {/* DELETE overlay (left swipe) */}
+                <Animated.View style={[styles.overlay, styles.overlayDelete, deleteOverlayStyle]}>
+                  <Text style={[styles.overlayText, { fontSize: rf(36) }]}>DELETE</Text>
+                </Animated.View>
+
+                {/* Bottom caption */}
+                <View style={styles.cardCaption}>
+                  <Text style={[styles.captionFilename, { fontSize: rf(15) }]}>
+                    {photo.filename}
+                  </Text>
+                  <Text style={[styles.captionHint, { fontSize: rf(13) }]}>
+                    {photo.fileSize != null && photo.fileSize > 0
+                      ? `${(photo.fileSize / 1_000_000).toFixed(1)} MB`
+                      : 'Loading size…'}
+                  </Text>
+                </View>
+              </Animated.View>
+            </GestureDetector>
+          </View>
         ) : (
           <View style={[styles.emptyCard, { width: Card.width, borderRadius: Card.radius }]}>
             {deleteCount > 0 ? (
@@ -439,6 +492,16 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Stack container holds all 3 cards at the same absolute position
+  cardStack: {
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  // Every card in the stack is absolute-positioned at top:0; transforms move them
+  cardBehind: {
+    position: 'absolute',
+    top: 0,
   },
   card: {
     overflow: 'hidden',
