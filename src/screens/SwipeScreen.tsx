@@ -23,8 +23,14 @@ import Animated, {
 } from 'react-native-reanimated';
 import type { RootStackParamList, Photo } from '../types';
 import { Colors, Font, Radius, Card, SCREEN, rw, rh, rf } from '../constants/theme';
-import { getActiveSessionId, getUpcomingPhotos, getQueueProgress, startSession } from '../services/photoQueue';
-import { commitSwipe, undoLastSwipe, getDeleteQueueIds } from '../services/swipeEngine';
+import {
+  getActiveSessionId,
+  getUpcomingPhotos,
+  getQueueProgress,
+  startSession,
+  countUnreviewedPhotos,
+} from '../services/photoQueue';
+import { commitSwipe, undoLastSwipe, getDeleteQueueIds, completeSession } from '../services/swipeEngine';
 
 type Nav = StackNavigationProp<RootStackParamList>;
 
@@ -41,6 +47,8 @@ export default function SwipeScreen() {
   const [reviewed, setReviewed] = useState(0);
   const [total, setTotal] = useState(0);
   const [deleteCount, setDeleteCount] = useState(0);
+  const [remainingInLibrary, setRemainingInLibrary] = useState<number | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const progressFraction = total > 0 ? reviewed / total : 0;
   const isEmpty = queue.length === 0;
@@ -62,7 +70,34 @@ export default function SwipeScreen() {
     setQueue(next);
     setReviewed(progress.reviewed);
     setTotal(progress.total);
+
+    // When the queue runs out, look up how many photos in the whole library
+    // still haven't been reviewed — drives the load-more vs. all-done UI.
+    if (next.length === 0) {
+      const remaining = await countUnreviewedPhotos();
+      setRemainingInLibrary(remaining);
+    } else {
+      setRemainingInLibrary(null);
+    }
   }, []);
+
+  const handleLoadMore = useCallback(async () => {
+    if (!sessionId || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      // Close the current session (records stats) before starting a fresh batch.
+      await completeSession(sessionId);
+      const newSid = await startSession();
+      setSessionId(newSid);
+      setReviewed(0);
+      setDeleteCount(0);
+      await refreshQueue(newSid);
+    } catch (e) {
+      console.warn('[handleLoadMore]', e);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [sessionId, loadingMore, refreshQueue]);
 
   useFocusEffect(
     useCallback(() => {
@@ -267,21 +302,52 @@ export default function SwipeScreen() {
           </GestureDetector>
         ) : (
           <View style={[styles.emptyCard, { width: Card.width, borderRadius: Card.radius }]}>
-            <Text style={[styles.emptyEmoji, { fontSize: rf(44) }]}>✦✦{'\n'}✦</Text>
-            <Text style={[styles.emptyTitle, { fontSize: rf(24) }]}>All caught up</Text>
-            <Text style={[styles.emptySubtitle, { fontSize: rf(15) }]}>
-              Review your deletions to free up storage.
-            </Text>
-            {deleteCount > 0 && (
-              <TouchableOpacity
-                style={[styles.reviewBtn, { borderRadius: Radius.full }]}
-                onPress={handleReview}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.reviewBtnText, { fontSize: rf(16) }]}>
-                  Review {deleteCount}
+            {deleteCount > 0 ? (
+              // 1. Pending deletes — review them first
+              <>
+                <Text style={[styles.emptyEmoji, { fontSize: rf(44) }]}>✦✦{'\n'}✦</Text>
+                <Text style={[styles.emptyTitle, { fontSize: rf(24) }]}>All caught up</Text>
+                <Text style={[styles.emptySubtitle, { fontSize: rf(15) }]}>
+                  Review your deletions to free up storage.
                 </Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.reviewBtn, { borderRadius: Radius.full }]}
+                  onPress={handleReview}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.reviewBtnText, { fontSize: rf(16) }]}>
+                    Review {deleteCount}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : remainingInLibrary !== null && remainingInLibrary > 0 ? (
+              // 2. More photos available — offer to load another batch
+              <>
+                <Text style={[styles.emptyEmoji, { fontSize: rf(44) }]}>📸</Text>
+                <Text style={[styles.emptyTitle, { fontSize: rf(24) }]}>Nice work!</Text>
+                <Text style={[styles.emptySubtitle, { fontSize: rf(15) }]}>
+                  You reviewed {total} photos. {remainingInLibrary} more waiting.
+                </Text>
+                <TouchableOpacity
+                  style={[styles.reviewBtn, { borderRadius: Radius.full, opacity: loadingMore ? 0.6 : 1 }]}
+                  onPress={handleLoadMore}
+                  activeOpacity={0.85}
+                  disabled={loadingMore}
+                >
+                  <Text style={[styles.reviewBtnText, { fontSize: rf(16) }]}>
+                    {loadingMore ? 'Loading…' : 'Load more photos'}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              // 3. Library fully reviewed — celebrate
+              <>
+                <Text style={[styles.emptyEmoji, { fontSize: rf(44) }]}>🎉</Text>
+                <Text style={[styles.emptyTitle, { fontSize: rf(24) }]}>Library cleaned!</Text>
+                <Text style={[styles.emptySubtitle, { fontSize: rf(15) }]}>
+                  You've reviewed every photo in your library.
+                </Text>
+              </>
             )}
           </View>
         )}
