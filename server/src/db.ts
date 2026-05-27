@@ -18,7 +18,7 @@ export function getDbState(): DbState {
 
 export async function connectDB(): Promise<void> {
   const uri = process.env.MONGODB_URI;
-  const dbName = process.env.MONGODB_DB ?? 'photoswipe';
+  const dbName = process.env.MONGODB_DB ?? 'PhotoWiper';
 
   if (!uri || uri.includes('<user>') || uri.includes('<password>')) {
     throw new Error('MONGODB_URI is not set or still contains placeholder values. Edit server/.env.');
