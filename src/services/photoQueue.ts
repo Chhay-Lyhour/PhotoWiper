@@ -1,6 +1,6 @@
 import { getDatabase, withTransaction } from './databaseService';
 import type { PhotoRow } from './databaseService';
-import { fetchAll, type IndexProgress } from './mediaLibraryService';
+import { fetchAll, enrichWithFileSize, type IndexProgress } from './mediaLibraryService';
 import type { Photo } from '../types';
 
 const DEFAULT_SESSION_SIZE = 50;
@@ -139,7 +139,41 @@ export async function getUpcomingPhotos(sessionId: string, limit: number = 5): P
     sessionId,
     limit,
   );
-  return rows.map(rowToPhoto);
+
+  const photos = rows.map(rowToPhoto);
+
+  // Backfill any missing fileSize via MediaLibrary.getAssetInfoAsync (iOS
+  // omits it from the bulk listing). Persist back to SQLite so we only pay
+  // the lookup cost once per photo, not every session.
+  const needsSize = photos.some((p) => p.fileSize === undefined);
+  if (!needsSize) return photos;
+
+  const enriched = await enrichWithFileSize(photos);
+  const updated = enriched.filter((p, i) => p.fileSize !== photos[i].fileSize && p.fileSize !== undefined);
+
+  if (updated.length) {
+    await withTransaction(async (tx) => {
+      for (const p of updated) {
+        await tx.runAsync(`UPDATE photos SET file_size = ? WHERE id = ?`, p.fileSize ?? null, p.id);
+      }
+    });
+  }
+
+  return enriched;
+}
+
+/**
+ * Counts photos that have never been swiped on, in any past session.
+ * Used by the SwipeScreen to decide whether to offer "load more" when the
+ * current session's queue is exhausted.
+ */
+export async function countUnreviewedPhotos(): Promise<number> {
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM photos
+     WHERE id NOT IN (SELECT photo_id FROM swipe_records)`,
+  );
+  return row?.n ?? 0;
 }
 
 export async function getQueueProgress(sessionId: string): Promise<{ reviewed: number; total: number }> {
