@@ -2,7 +2,7 @@
  * DeletingScreen — trash icon · progress bar · "X of Y deleted"
  * Design ref: Image 3
  */
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, Animated, useWindowDimensions,
 } from 'react-native';
@@ -10,21 +10,21 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types';
 import { Colors, Font, Radius, rw, rh, rf } from '../constants/theme';
+import { getActiveSessionId } from '../services/photoQueue';
+import { getDeleteQueueIds, completeSession } from '../services/swipeEngine';
+import { deletePhotos } from '../services/mediaLibraryService';
 
 type Props = StackScreenProps<RootStackParamList, 'Deleting'>;
-
-const MOCK_TOTAL = 9;
 
 export default function DeletingScreen({ navigation }: Props) {
   const insets  = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
-  const barAnim     = useRef(new Animated.Value(0)).current;
-  const pulseAnim   = useRef(new Animated.Value(1)).current;
-  const currentRef  = useRef(0);
-  const [current, setCurrent] = React.useState(0);
+  const barAnim   = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const [current, setCurrent] = useState(0);
+  const [total, setTotal] = useState(0);
 
-  // Pulse the icon
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
@@ -34,34 +34,65 @@ export default function DeletingScreen({ navigation }: Props) {
     ).start();
   }, []);
 
-  // Simulate deletion progress
   useEffect(() => {
-    const timer = setInterval(() => {
-      currentRef.current += 1;
-      const n = currentRef.current;
-      setCurrent(n);
-      Animated.timing(barAnim, {
-        toValue: n / MOCK_TOTAL,
-        duration: 300,
-        useNativeDriver: false,
-      }).start();
-
-      if (n >= MOCK_TOTAL) {
-        clearInterval(timer);
-        setTimeout(() => {
-          navigation.replace('AllDone', {
-            stats: {
-              totalReviewed: 24,
-              totalKept: 15,
-              totalDeleted: MOCK_TOTAL,
-              storageSavedBytes: 37.5 * 1_000_000,
-              sessionDurationMs: 180_000,
-            },
-          });
-        }, 600);
+    let cancelled = false;
+    (async () => {
+      const sid = await getActiveSessionId();
+      if (!sid) {
+        navigation.replace('MainTabs');
+        return;
       }
-    }, 400);
-    return () => clearInterval(timer);
+
+      const ids = await getDeleteQueueIds(sid);
+      if (cancelled) return;
+      setTotal(ids.length);
+
+      if (ids.length === 0) {
+        const stats = await completeSession(sid);
+        if (!cancelled) navigation.replace('AllDone', { stats });
+        return;
+      }
+
+      // Animate counter from 0 → total while the native delete runs.
+      // MediaLibrary.deleteAssetsAsync is atomic (one user prompt for the whole batch),
+      // so we can't report real per-photo progress — just give the user motion.
+      const stepMs = Math.max(40, Math.min(120, Math.floor(1800 / ids.length)));
+      let counter = 0;
+      const tick = setInterval(() => {
+        if (cancelled) { clearInterval(tick); return; }
+        counter = Math.min(counter + 1, ids.length);
+        setCurrent(counter);
+        Animated.timing(barAnim, {
+          toValue: counter / ids.length,
+          duration: stepMs,
+          useNativeDriver: false,
+        }).start();
+        if (counter >= ids.length) clearInterval(tick);
+      }, stepMs);
+
+      try {
+        const ok = await deletePhotos(ids);
+        clearInterval(tick);
+        if (cancelled) return;
+        if (!ok) {
+          console.warn('[Deleting] user cancelled or delete failed');
+          navigation.replace('MainTabs');
+          return;
+        }
+        setCurrent(ids.length);
+        Animated.timing(barAnim, { toValue: 1, duration: 200, useNativeDriver: false }).start();
+
+        const stats = await completeSession(sid);
+        if (!cancelled) {
+          setTimeout(() => navigation.replace('AllDone', { stats }), 500);
+        }
+      } catch (e) {
+        clearInterval(tick);
+        console.warn('[Deleting] error:', e);
+        if (!cancelled) navigation.replace('MainTabs');
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const barWidth = barAnim.interpolate({
@@ -73,7 +104,6 @@ export default function DeletingScreen({ navigation }: Props) {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-      {/* Trash icon with pulse */}
       <Animated.View
         style={[
           styles.iconCircle,
@@ -83,20 +113,17 @@ export default function DeletingScreen({ navigation }: Props) {
         <Text style={[styles.iconGlyph, { fontSize: rf(52) }]}>🗑</Text>
       </Animated.View>
 
-      {/* Texts */}
       <Text style={[styles.title, { fontSize: rf(28) }]}>Deleting photos…</Text>
       <Text style={[styles.subtitle, { fontSize: rf(16) }]}>
-        Permanently removing {MOCK_TOTAL} photos from your device
+        Permanently removing {total} photo{total === 1 ? '' : 's'} from your device
       </Text>
 
-      {/* Progress bar */}
       <View style={[styles.barTrack, { width: barTrackW, marginTop: rh(32) }]}>
         <Animated.View style={[styles.barFill, { width: barWidth }]} />
       </View>
 
-      {/* Counter */}
       <Text style={[styles.counter, { fontSize: rf(16) }]}>
-        {current} of {MOCK_TOTAL} deleted
+        {current} of {total} deleted
       </Text>
     </View>
   );

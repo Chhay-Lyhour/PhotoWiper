@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types';
 import { Colors, Font, Radius, rw, rh, rf } from '../constants/theme';
+import { getActiveSessionId } from '../services/photoQueue';
 
 type Props = StackScreenProps<RootStackParamList, 'Splash'>;
 
@@ -23,7 +24,6 @@ export default function SplashScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
-  // Fade-in animation
   const opacity = useRef(new Animated.Value(0)).current;
   const slideY  = useRef(new Animated.Value(30)).current;
 
@@ -33,6 +33,23 @@ export default function SplashScreen({ navigation }: Props) {
       Animated.timing(slideY,  { toValue: 0, duration: 700, useNativeDriver: true }),
     ]).start();
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const sid = await getActiveSessionId();
+        if (cancelled) return;
+        if (sid) {
+          navigation.replace('Resume', { sessionId: sid });
+          return;
+        }
+      } catch (e) {
+        console.warn('[Splash] active session check failed:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [navigation]);
 
   const handleStart = () => navigation.replace('Permission');
 
