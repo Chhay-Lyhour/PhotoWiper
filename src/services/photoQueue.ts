@@ -142,24 +142,14 @@ export async function getUpcomingPhotos(sessionId: string, limit: number = 5): P
 
   const photos = rows.map(rowToPhoto);
 
-  // Backfill any missing fileSize via MediaLibrary.getAssetInfoAsync (iOS
-  // omits it from the bulk listing). Persist back to SQLite so we only pay
-  // the lookup cost once per photo, not every session.
-  const needsSize = photos.some((p) => p.fileSize === undefined);
-  if (!needsSize) return photos;
+  // Size enrichment via MediaLibrary.getAssetInfoAsync is currently
+  // DISABLED — it caused a native crash on Expo Go iOS when iOS rejected
+  // the call for assets covered by the new limited-permission model.
+  // The caption will show "Loading size…" until we move to a dev build.
+  // (Keep `enrichWithFileSize` available for future use.)
+  void enrichWithFileSize;
 
-  const enriched = await enrichWithFileSize(photos);
-  const updated = enriched.filter((p, i) => p.fileSize !== photos[i].fileSize && p.fileSize !== undefined);
-
-  if (updated.length) {
-    await withTransaction(async (tx) => {
-      for (const p of updated) {
-        await tx.runAsync(`UPDATE photos SET file_size = ? WHERE id = ?`, p.fileSize ?? null, p.id);
-      }
-    });
-  }
-
-  return enriched;
+  return photos;
 }
 
 /**

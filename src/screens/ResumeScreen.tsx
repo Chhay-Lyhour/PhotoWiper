@@ -17,29 +17,59 @@ type Props = StackScreenProps<RootStackParamList, 'Resume'>;
 export default function ResumeScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { sessionId } = route.params;
+  const sessionId = route.params?.sessionId;
 
   const [photosLeft, setPhotosLeft] = useState(0);
   const [markedToDelete, setMarkedToDelete] = useState(0);
+  const [busy, setBusy] = useState(false);
+
+  // If we somehow landed here without a valid sessionId, bail out cleanly
+  // rather than crash on a null reference inside the effect below.
+  useEffect(() => {
+    if (!sessionId) {
+      console.warn('[Resume] no sessionId in route params, routing to Permission');
+      navigation.replace('Permission');
+    }
+  }, [sessionId, navigation]);
 
   useEffect(() => {
+    if (!sessionId) return;
     let cancelled = false;
     (async () => {
-      const [progress, deleteIds] = await Promise.all([
-        getQueueProgress(sessionId),
-        getDeleteQueueIds(sessionId),
-      ]);
-      if (cancelled) return;
-      setPhotosLeft(Math.max(progress.total - progress.reviewed, 0));
-      setMarkedToDelete(deleteIds.length);
+      try {
+        const [progress, deleteIds] = await Promise.all([
+          getQueueProgress(sessionId),
+          getDeleteQueueIds(sessionId),
+        ]);
+        if (cancelled) return;
+        setPhotosLeft(Math.max(progress.total - progress.reviewed, 0));
+        setMarkedToDelete(deleteIds.length);
+      } catch (err) {
+        console.warn('[Resume] failed to read session stats:', err);
+      }
     })();
     return () => { cancelled = true; };
   }, [sessionId]);
 
-  const handleResume = () => navigation.replace('MainTabs');
-  const handleFresh  = async () => {
-    await pauseSession(sessionId);
-    navigation.replace('Loading');
+  const handleResume = () => {
+    if (busy) return;
+    try {
+      navigation.replace('MainTabs');
+    } catch (err) {
+      console.warn('[Resume] navigation failed:', err);
+    }
+  };
+
+  const handleFresh = async () => {
+    if (busy || !sessionId) return;
+    setBusy(true);
+    try {
+      await pauseSession(sessionId);
+      navigation.replace('Loading');
+    } catch (err) {
+      console.warn('[Resume] start-fresh failed:', err);
+      setBusy(false);
+    }
   };
 
   return (
@@ -72,20 +102,24 @@ export default function ResumeScreen({ navigation, route }: Props) {
 
         {/* Resume button */}
         <TouchableOpacity
-          style={[styles.resumeBtn, { width: width - rw(40), borderRadius: Radius.full }]}
+          style={[styles.resumeBtn, { width: width - rw(40), borderRadius: Radius.full, opacity: busy ? 0.6 : 1 }]}
           onPress={handleResume}
           activeOpacity={0.85}
+          disabled={busy}
         >
           <Text style={[styles.resumeText, { fontSize: rf(17) }]}>↻  Resume session</Text>
         </TouchableOpacity>
 
         {/* Start fresh */}
         <TouchableOpacity
-          style={[styles.freshBtn, { width: width - rw(40), borderRadius: Radius.full }]}
+          style={[styles.freshBtn, { width: width - rw(40), borderRadius: Radius.full, opacity: busy ? 0.6 : 1 }]}
           onPress={handleFresh}
           activeOpacity={0.85}
+          disabled={busy}
         >
-          <Text style={[styles.freshText, { fontSize: rf(17) }]}>Start fresh</Text>
+          <Text style={[styles.freshText, { fontSize: rf(17) }]}>
+            {busy ? 'Working…' : 'Start fresh'}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>

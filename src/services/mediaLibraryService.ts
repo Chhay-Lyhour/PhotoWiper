@@ -76,26 +76,45 @@ export async function enrichWithFileSize(photos: Photo[]): Promise<Photo[]> {
     photos.map(async (p) => {
       if (p.fileSize != null && p.fileSize > 0) return p;
       try {
-        // AssetInfo does have fileSize at runtime but the SDK 54 types omit it
-        const info = await MediaLibrary.getAssetInfoAsync(p.id) as MediaLibrary.AssetInfo & { fileSize?: number };
+        // shouldDownloadFromNetwork:false avoids a native crash on iOS when
+        // iCloud-only photos would otherwise be fetched from the network.
+        const info = await MediaLibrary.getAssetInfoAsync(p.id, {
+          shouldDownloadFromNetwork: false,
+        }) as MediaLibrary.AssetInfo & { fileSize?: number };
+
+        // DEBUG — remove once size display is verified working on device
+        console.log('[enrichSize]', p.id.slice(0, 8), {
+          mlFileSize: info.fileSize,
+          hasLocalUri: !!info.localUri,
+          origUri: p.uri.slice(0, 24),
+        });
 
         // Primary: fileSize from MediaLibrary (bytes, available when asset is local)
         if (info.fileSize != null && info.fileSize > 0) {
           return { ...p, fileSize: info.fileSize };
         }
 
-        // Fallback: measure the local file directly via FileSystem
+        // Fallback: measure the local file directly via FileSystem.
+        // IMPORTANT: only attempt this for file:// URIs. ph:// is iOS PhotoKit
+        // and FileSystem can't handle it — passing one can trigger a native
+        // exception that crashes the app on iOS.
         const uri = info.localUri ?? p.uri;
-        if (uri) {
-          // expo-file-system v19 returns size directly without needing an option flag
-          const fileInfo = await FileSystem.getInfoAsync(uri);
-          if (fileInfo.exists && 'size' in fileInfo && (fileInfo.size as number) > 0) {
-            return { ...p, fileSize: fileInfo.size as number };
+        if (uri && uri.startsWith('file://')) {
+          try {
+            const fileInfo = await FileSystem.getInfoAsync(uri);
+            const size = (fileInfo as { size?: number }).size;
+            console.log('[enrichSize fallback]', p.id.slice(0, 8), { exists: fileInfo.exists, size });
+            if (fileInfo.exists && size != null && size > 0) {
+              return { ...p, fileSize: size };
+            }
+          } catch (fsErr) {
+            console.warn('[enrichSize FS error]', p.id.slice(0, 8), (fsErr as Error).message);
           }
         }
 
         return p;
-      } catch {
+      } catch (err) {
+        console.warn('[enrichSize ML error]', p.id.slice(0, 8), (err as Error).message);
         return p;
       }
     }),
