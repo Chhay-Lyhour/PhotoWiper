@@ -1,20 +1,25 @@
 import { getDatabase, withTransaction } from './databaseService';
 import type { PhotoRow } from './databaseService';
-import { fetchAll, enrichWithFileSize, type IndexProgress } from './mediaLibraryService';
+import { fetchAll, estimateFileSize, type IndexProgress } from './mediaLibraryService';
 import type { Photo } from '../types';
 
 const DEFAULT_SESSION_SIZE = 50;
 
 function rowToPhoto(r: PhotoRow): Photo {
+  const width = r.width ?? 0;
+  const height = r.height ?? 0;
+  // Rows indexed before the estimator existed have file_size NULL. Apply the
+  // estimate at read time so the caption never falls back to "Loading size…".
+  const fileSize = r.file_size && r.file_size > 0 ? r.file_size : estimateFileSize(width, height);
   return {
     id: r.id,
     uri: r.uri,
     filename: r.filename ?? '',
-    width: r.width ?? 0,
-    height: r.height ?? 0,
+    width,
+    height,
     creationTime: r.creation_time ?? 0,
     modificationTime: r.modification_time ?? 0,
-    fileSize: r.file_size ?? undefined,
+    fileSize,
     mediaType: r.media_type,
   };
 }
@@ -48,6 +53,7 @@ export async function indexLibrary(
          ON CONFLICT(id) DO UPDATE SET
            uri = excluded.uri,
            filename = excluded.filename,
+           file_size = COALESCE(excluded.file_size, photos.file_size),
            width = excluded.width,
            height = excluded.height,
            modification_time = excluded.modification_time`,
@@ -140,16 +146,7 @@ export async function getUpcomingPhotos(sessionId: string, limit: number = 5): P
     limit,
   );
 
-  const photos = rows.map(rowToPhoto);
-
-  // Size enrichment via MediaLibrary.getAssetInfoAsync is currently
-  // DISABLED — it caused a native crash on Expo Go iOS when iOS rejected
-  // the call for assets covered by the new limited-permission model.
-  // The caption will show "Loading size…" until we move to a dev build.
-  // (Keep `enrichWithFileSize` available for future use.)
-  void enrichWithFileSize;
-
-  return photos;
+  return rows.map(rowToPhoto);
 }
 
 /**

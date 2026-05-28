@@ -157,13 +157,25 @@ export async function resetDatabase(): Promise<void> {
   await getDatabase();
 }
 
+// expo-sqlite only allows one BEGIN at a time on a single connection. Fast
+// swipes can fire commitSwipe() before the previous transaction finishes,
+// which throws "cannot start a transaction within a transaction". Chain
+// callers through a single promise so transactions run one at a time.
+let txQueue: Promise<unknown> = Promise.resolve();
+
 export async function withTransaction<T>(
   fn: (db: SQLite.SQLiteDatabase) => Promise<T>,
 ): Promise<T> {
   const db = await getDatabase();
-  let result!: T;
-  await db.withTransactionAsync(async () => {
-    result = await fn(db);
+  const next = txQueue.then(async () => {
+    let result!: T;
+    await db.withTransactionAsync(async () => {
+      result = await fn(db);
+    });
+    return result;
   });
-  return result;
+  // Swallow errors on the queue so one failure doesn't poison subsequent
+  // transactions; the original promise still rejects to the caller.
+  txQueue = next.catch(() => undefined);
+  return next as Promise<T>;
 }
