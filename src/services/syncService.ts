@@ -10,7 +10,35 @@ import {
   getPlatform,
   getAppVersion,
 } from './deviceService';
+import { getDatabase } from './databaseService';
 import type { Session, DailyStats } from '../types';
+
+// ─── Public: sync status for Settings screen ─────────────────────────────────
+
+export type SyncStatus = {
+  pendingCount: number;
+  lastSyncedAt: number | null;
+};
+
+/** Counts unsynced rows and finds the most recent `synced_at` timestamp. */
+export async function getSyncStatus(): Promise<SyncStatus> {
+  const [sessions, daily] = await Promise.all([
+    getUnsyncedSessions(),
+    getUnsyncedDailyStats(),
+  ]);
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<{ ts: number | null }>(`
+    SELECT MAX(t) AS ts FROM (
+      SELECT MAX(synced_at) AS t FROM sessions WHERE synced_at IS NOT NULL
+      UNION ALL
+      SELECT MAX(synced_at) AS t FROM daily_stats WHERE synced_at IS NOT NULL
+    )
+  `);
+  return {
+    pendingCount: sessions.length + daily.length,
+    lastSyncedAt: row?.ts ?? null,
+  };
+}
 
 // ─── Low-level HTTP helper ──────────────────────────────────────────────────
 

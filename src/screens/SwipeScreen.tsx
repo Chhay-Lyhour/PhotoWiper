@@ -3,7 +3,7 @@
  * Drag-to-swipe card: left = delete, right = keep
  * Two states: active swiping / "All caught up" empty state
  */
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   Animated as RNAnimated, Easing,
@@ -23,7 +23,8 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import type { RootStackParamList, Photo } from '../types';
-import { Colors, Font, Radius, Card, SCREEN, rw, rh, rf } from '../constants/theme';
+import { Font, Radius, Card, SCREEN, rw, rh, rf, type ThemePalette } from '../constants/theme';
+import { useTheme } from '../theme/ThemeContext';
 import {
   getActiveSessionId,
   getUpcomingPhotos,
@@ -32,16 +33,34 @@ import {
   countUnreviewedPhotos,
 } from '../services/photoQueue';
 import { commitSwipe, undoLastSwipe, getDeleteQueueIds, completeSession } from '../services/swipeEngine';
+import { haptics } from '../services/hapticsService';
+import { useStore } from '../store/useStore';
+import type { SwipeSensitivity } from '../types';
 
 type Nav = StackNavigationProp<RootStackParamList>;
 
-const SWIPE_THRESHOLD = Card.swipeThreshold;
 const FLY_DISTANCE = SCREEN.W * 1.4;
 const PREFETCH_COUNT = 3;
+
+// "Easy" commits with a small drag; "firm" forces a deliberate one. Falls
+// back to the theme's default for "normal" so existing tuning is preserved.
+function thresholdFor(sensitivity: SwipeSensitivity): number {
+  switch (sensitivity) {
+    case 'easy': return rw(60);
+    case 'firm': return rw(140);
+    case 'normal':
+    default: return Card.swipeThreshold;
+  }
+}
 
 export default function SwipeScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
+  const settings = useStore((s) => s.settings);
+  const invertSwipe = settings.invertSwipe;
+  const SWIPE_THRESHOLD = thresholdFor(settings.swipeSensitivity);
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [queue, setQueue] = useState<Photo[]>([]);
@@ -57,6 +76,11 @@ export default function SwipeScreen() {
 
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
+  // Tracks whether we've already fired the threshold-crossing haptic for the
+  // current gesture. Reset to 0 on gesture begin; flipped to 1 the first time
+  // |translateX| > SWIPE_THRESHOLD, so the user feels exactly one "magnetic"
+  // tick per swipe instead of a buzzy stream.
+  const didTickThreshold = useSharedValue(0);
 
   // Back-card stack rise: 0 = resting (cards at offset positions), 1 = risen
   // one slot (card1 → front, card2 → middle). Driven by RN's Animated (not
@@ -178,6 +202,7 @@ export default function SwipeScreen() {
 
   const handleUndo = useCallback(async () => {
     if (!sessionId) return;
+    haptics.undo();
     const restored = await undoLastSwipe(sessionId);
     if (!restored) return;
     await refreshQueue(sessionId);
@@ -185,19 +210,28 @@ export default function SwipeScreen() {
     resetCard();
   }, [sessionId, refreshQueue, refreshDeleteCount, resetCard]);
 
-  const handleReview = () => navigation.navigate('Review');
+  const handleReview = () => {
+    haptics.selection();
+    navigation.navigate('Review');
+  };
 
-  // Button-tap fly-offs
-  const flyOffRight = () => {
+  // Button-tap fly-offs. Direction of travel depends on invertSwipe so the
+  // visual matches the swipe semantics the user expects: by default keep
+  // flies right, delete flies left; inverted reverses both.
+  const flyOffKeep = () => {
+    haptics.commitKeep();
     startStackRise();
-    translateX.value = withTiming(FLY_DISTANCE, { duration: 220 }, (done) => {
+    const target = invertSwipe ? -FLY_DISTANCE : FLY_DISTANCE;
+    translateX.value = withTiming(target, { duration: 220 }, (done) => {
       'worklet';
       if (done) runOnJS(commitKeep)();
     });
   };
-  const flyOffLeft = () => {
+  const flyOffDelete = () => {
+    haptics.commitDelete();
     startStackRise();
-    translateX.value = withTiming(-FLY_DISTANCE, { duration: 220 }, (done) => {
+    const target = invertSwipe ? FLY_DISTANCE : -FLY_DISTANCE;
+    translateX.value = withTiming(target, { duration: 220 }, (done) => {
       'worklet';
       if (done) runOnJS(commitDelete)();
     });
@@ -206,23 +240,49 @@ export default function SwipeScreen() {
   // Pan gesture
   const pan = Gesture.Pan()
     .activeOffsetX([-10, 10])
+    .onBegin(() => {
+      'worklet';
+      didTickThreshold.value = 0;
+    })
     .onUpdate((e) => {
+      'worklet';
       translateX.value = e.translationX;
       translateY.value = e.translationY * 0.25;
+      // Fire a single "magnetic" tick the first frame |translateX| crosses
+      // the commit threshold this gesture. Lets the user feel exactly when
+      // letting go will commit, without spamming haptics on every frame.
+      if (didTickThreshold.value === 0 && Math.abs(e.translationX) > SWIPE_THRESHOLD) {
+        didTickThreshold.value = 1;
+        runOnJS(haptics.thresholdTick)();
+      }
     })
     .onEnd((e) => {
       'worklet';
       if (e.translationX > SWIPE_THRESHOLD) {
+        // Right past threshold → keep by default, delete when inverted.
+        const isKeep = !invertSwipe;
+        if (isKeep) runOnJS(haptics.commitKeep)();
+        else runOnJS(haptics.commitDelete)();
         runOnJS(startStackRise)();
         translateX.value = withTiming(FLY_DISTANCE, { duration: 220 }, (done) => {
           'worklet';
-          if (done) runOnJS(commitKeep)();
+          if (done) {
+            if (isKeep) runOnJS(commitKeep)();
+            else runOnJS(commitDelete)();
+          }
         });
       } else if (e.translationX < -SWIPE_THRESHOLD) {
+        // Left past threshold → delete by default, keep when inverted.
+        const isKeep = invertSwipe;
+        if (isKeep) runOnJS(haptics.commitKeep)();
+        else runOnJS(haptics.commitDelete)();
         runOnJS(startStackRise)();
         translateX.value = withTiming(-FLY_DISTANCE, { duration: 220 }, (done) => {
           'worklet';
-          if (done) runOnJS(commitDelete)();
+          if (done) {
+            if (isKeep) runOnJS(commitKeep)();
+            else runOnJS(commitDelete)();
+          }
         });
       } else {
         translateX.value = withSpring(0, { damping: 14, stiffness: 140 });
@@ -390,14 +450,30 @@ export default function SwipeScreen() {
                   cachePolicy="memory-disk"
                 />
 
-                {/* KEEP overlay (right swipe) */}
-                <Animated.View style={[styles.overlay, styles.overlayKeep, keepOverlayStyle]}>
-                  <Text style={[styles.overlayText, { fontSize: rf(36) }]}>KEEP</Text>
+                {/* Right-swipe overlay — keep by default, delete when inverted */}
+                <Animated.View
+                  style={[
+                    styles.overlay,
+                    invertSwipe ? styles.overlayDelete : styles.overlayKeep,
+                    keepOverlayStyle,
+                  ]}
+                >
+                  <Text style={[styles.overlayText, { fontSize: rf(36) }]}>
+                    {invertSwipe ? 'DELETE' : 'KEEP'}
+                  </Text>
                 </Animated.View>
 
-                {/* DELETE overlay (left swipe) */}
-                <Animated.View style={[styles.overlay, styles.overlayDelete, deleteOverlayStyle]}>
-                  <Text style={[styles.overlayText, { fontSize: rf(36) }]}>DELETE</Text>
+                {/* Left-swipe overlay — delete by default, keep when inverted */}
+                <Animated.View
+                  style={[
+                    styles.overlay,
+                    invertSwipe ? styles.overlayKeep : styles.overlayDelete,
+                    deleteOverlayStyle,
+                  ]}
+                >
+                  <Text style={[styles.overlayText, { fontSize: rf(36) }]}>
+                    {invertSwipe ? 'KEEP' : 'DELETE'}
+                  </Text>
                 </Animated.View>
 
                 {/* Bottom caption */}
@@ -471,7 +547,7 @@ export default function SwipeScreen() {
       <View style={styles.actions}>
         <TouchableOpacity
           style={[styles.actionBtn, { width: rw(64), height: rw(64), borderRadius: Radius.full }]}
-          onPress={flyOffLeft}
+          onPress={flyOffDelete}
           activeOpacity={0.8}
           disabled={isEmpty}
         >
@@ -488,7 +564,7 @@ export default function SwipeScreen() {
 
         <TouchableOpacity
           style={[styles.actionBtnPrimary, { width: rw(64), height: rw(64), borderRadius: Radius.full }]}
-          onPress={flyOffRight}
+          onPress={flyOffKeep}
           activeOpacity={0.8}
           disabled={isEmpty}
         >
@@ -499,8 +575,8 @@ export default function SwipeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg },
+const createStyles = (c: ThemePalette) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: c.bg },
 
   // Header
   header: {
@@ -510,20 +586,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: rw(20),
     paddingBottom: rh(12),
   },
-  headerTitle: { fontWeight: Font.bold, color: Colors.textPrimary },
-  headerSub: { color: Colors.textSecondary, marginTop: rh(2) },
+  headerTitle: { fontWeight: Font.bold, color: c.textPrimary },
+  headerSub: { color: c.textSecondary, marginTop: rh(2) },
   badgeBtn: {
-    backgroundColor: Colors.purple2,
+    backgroundColor: c.purple2,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
   },
-  badgeBtnIcon: { color: Colors.white },
+  badgeBtnIcon: { color: c.white },
   badge: {
     position: 'absolute',
     top: -rh(4),
     right: -rw(4),
-    backgroundColor: Colors.delete,
+    backgroundColor: c.delete,
     borderRadius: Radius.full,
     minWidth: rw(20),
     height: rw(20),
@@ -531,19 +607,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: rw(4),
   },
-  badgeText: { color: Colors.white, fontWeight: Font.bold },
+  badgeText: { color: c.white, fontWeight: Font.bold },
 
   // Progress
   progressTrack: {
     height: rh(3),
-    backgroundColor: Colors.surfaceTint,
+    backgroundColor: c.surfaceTint,
     borderRadius: Radius.full,
     overflow: 'hidden',
     marginBottom: rh(16),
   },
   progressFill: {
     height: '100%',
-    backgroundColor: Colors.purple2,
+    backgroundColor: c.purple2,
     borderRadius: Radius.full,
   },
 
@@ -565,7 +641,7 @@ const styles = StyleSheet.create({
   },
   card: {
     overflow: 'hidden',
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     height: Card.height,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
@@ -583,7 +659,7 @@ const styles = StyleSheet.create({
     paddingBottom: rh(24),
     backgroundColor: 'rgba(0,0,0,0.38)',
   },
-  captionFilename: { color: Colors.white, fontWeight: Font.semibold },
+  captionFilename: { color: c.white, fontWeight: Font.semibold },
   captionHint: { color: 'rgba(255,255,255,0.72)', marginTop: rh(2) },
 
   // Swipe overlays
@@ -592,14 +668,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  overlayKeep: { backgroundColor: Colors.overlayKeep },
-  overlayDelete: { backgroundColor: Colors.overlayDelete },
+  overlayKeep: { backgroundColor: c.overlayKeep },
+  overlayDelete: { backgroundColor: c.overlayDelete },
   overlayText: {
-    color: Colors.white,
+    color: c.white,
     fontWeight: Font.extrabold,
     letterSpacing: 3,
     borderWidth: 4,
-    borderColor: Colors.white,
+    borderColor: c.white,
     borderRadius: Radius.md,
     paddingHorizontal: rw(20),
     paddingVertical: rh(8),
@@ -608,22 +684,22 @@ const styles = StyleSheet.create({
   // Empty state card
   emptyCard: {
     height: Card.height,
-    backgroundColor: Colors.surfaceTint,
+    backgroundColor: c.surfaceTint,
     alignItems: 'center',
     justifyContent: 'center',
     padding: rw(32),
     gap: rh(12),
   },
   emptyEmoji: { color: '#F59E0B', textAlign: 'center', lineHeight: rh(56) },
-  emptyTitle: { fontWeight: Font.bold, color: Colors.textPrimary, textAlign: 'center' },
-  emptySubtitle: { color: Colors.textSecondary, textAlign: 'center', lineHeight: rh(22) },
+  emptyTitle: { fontWeight: Font.bold, color: c.textPrimary, textAlign: 'center' },
+  emptySubtitle: { color: c.textSecondary, textAlign: 'center', lineHeight: rh(22) },
   reviewBtn: {
-    backgroundColor: Colors.purple3,
+    backgroundColor: c.purple3,
     paddingVertical: rh(14),
     paddingHorizontal: rw(32),
     marginTop: rh(8),
   },
-  reviewBtnText: { color: Colors.white, fontWeight: Font.semibold },
+  reviewBtnText: { color: c.white, fontWeight: Font.semibold },
 
   // Action buttons
   actions: {
@@ -634,7 +710,7 @@ const styles = StyleSheet.create({
     paddingVertical: rh(24),
   },
   actionBtn: {
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -644,16 +720,16 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   actionBtnPrimary: {
-    backgroundColor: Colors.purple3,
+    backgroundColor: c.purple3,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: Colors.purple3,
+    shadowColor: c.purple3,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 10,
     elevation: 6,
   },
-  actionX: { color: Colors.delete },
-  actionUndo: { color: Colors.textSecondary },
-  actionHeart: { color: Colors.white },
+  actionX: { color: c.delete },
+  actionUndo: { color: c.textSecondary },
+  actionHeart: { color: c.white },
 });

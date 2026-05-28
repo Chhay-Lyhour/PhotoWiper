@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Photo, SwipeRecord, Session, AppSettings, DailyStats } from '../types';
 
 interface AppState {
@@ -43,13 +45,18 @@ interface AppState {
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
-  theme: 'light',
+  theme: 'system',
   hapticsEnabled: true,
+  hapticStrength: 'medium',
+  swipeSensitivity: 'normal',
+  invertSwipe: false,
+  confirmDelete: false,
+  reduceMotion: false,
   showFileSizes: true,
   batchSize: 50,
 };
 
-export const useStore = create<AppState>((set, get) => ({
+export const useStore = create<AppState>()(persist((set, get) => ({
   photoQueue: [],
   deleteQueue: [],
   swipeHistory: [],
@@ -99,4 +106,18 @@ export const useStore = create<AppState>((set, get) => ({
     set((s) => ({ settings: { ...s.settings, ...patch } })),
   resetSession: () =>
     set({ photoQueue: [], deleteQueue: [], swipeHistory: [], currentSession: null, loadingProgress: 0, loadingCount: 0, loadingStatus: '', deletingProgress: 0, deletingCurrent: 0, deletingTotal: 0 }),
-}));
+}),
+  {
+    name: 'photoswipe-settings',
+    storage: createJSONStorage(() => AsyncStorage),
+    // Only persist user preferences — photo queue / sessions live in SQLite,
+    // UI state (loading flags) should reset on cold start.
+    partialize: (state) => ({ settings: state.settings }),
+    // Merge persisted settings on top of defaults so new fields added later
+    // don't read back as undefined.
+    merge: (persisted, current) => ({
+      ...current,
+      settings: { ...current.settings, ...(persisted as { settings?: Partial<AppSettings> })?.settings },
+    }),
+  },
+));

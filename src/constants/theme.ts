@@ -17,6 +17,8 @@ export const rf = (px: number) => Math.round((SCREEN_W / BASE_W) * px);
 export const SCREEN = { W: SCREEN_W, H: SCREEN_H };
 
 // ─── Colours ───────────────────────────────────────────────────────────────
+// Light palette. `Colors` stays as the existing export so legacy imports keep
+// working; `lightColors` is an alias used by the theme system.
 export const Colors = {
   // Backgrounds
   bg: '#F5F0FF',          // light lavender — all screens
@@ -53,6 +55,51 @@ export const Colors = {
   overlayDelete: 'rgba(239,68,68,0.88)',
   shadow: 'rgba(124,58,237,0.15)',
 } as const;
+
+export const lightColors = Colors;
+
+// Dark palette — same key structure as `lightColors`, so screens can swap
+// between them by a single `useTheme()` call. Brand purples + semantic
+// keep/delete primaries stay the same so the app's identity is preserved
+// across modes; backgrounds, surfaces, borders, and text tones flip.
+export const darkColors: typeof Colors = {
+  // Backgrounds — purple-tinted dark, matching the splash palette
+  bg: '#0F0820',
+  bgDark: '#1E1333',
+  bgDarkDeep: '#160D28',
+  surface: '#1E1333',
+  surfaceTint: '#2A1F45',
+  border: '#2D2541',
+
+  // Brand purples unchanged
+  purple1: '#A78BFA',
+  purple2: '#8B5CF6',
+  purple3: '#7C3AED',
+
+  // Semantic — primaries unchanged; tinted backgrounds darken so they don't
+  // glow against the dark surface.
+  keep: '#22C55E',
+  keepBg: '#0F2E1F',
+  delete: '#EF4444',
+  deleteBg: '#3D0F0F',
+  accent: '#8B5CF6',
+
+  // Text — inverted tonal scale; subtle purple cast keeps brand feel.
+  textPrimary: '#F5F0FF',
+  textSecondary: '#A89BC2',
+  textMuted: '#6B5A8A',
+  textWhite: '#FFFFFF',
+  textPurple: '#A78BFA',  // brighter on dark surfaces
+
+  white: '#FFFFFF',
+  black: '#000000',
+  transparent: 'transparent',
+  overlayKeep: 'rgba(34,197,94,0.88)',
+  overlayDelete: 'rgba(239,68,68,0.88)',
+  shadow: 'rgba(0,0,0,0.45)',
+} as const;
+
+export type ThemePalette = typeof Colors;
 
 // ─── Gradients (pass to LinearGradient colors prop) ───────────────────────
 export const Gradients = {

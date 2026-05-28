@@ -2,13 +2,14 @@
  * DashboardScreen (Stats tab) — hero storage card · 3 chips · weekly bar chart
  * Design ref: Image 11
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { Colors, Font, Radius, rw, rh, rf } from '../constants/theme';
+import { Font, Radius, rw, rh, rf, type ThemePalette } from '../constants/theme';
+import { useTheme } from '../theme/ThemeContext';
 import { getLifetimeTotals, getDailyStats, type LifetimeTotals } from '../services/analyticsService';
 import type { DailyStats } from '../types';
 
@@ -42,6 +43,8 @@ function buildWeekSeries(stats: DailyStats[]): { day: string; mb: number; date: 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [totals, setTotals] = useState<LifetimeTotals>({
     totalReviewed: 0, totalDeleted: 0, totalKept: 0, totalSavedBytes: 0, sessionCount: 0,
@@ -108,15 +111,15 @@ export default function DashboardScreen() {
       {/* ── Three chips ── */}
       <View style={[styles.chipsRow, { width: width - rw(40) }]}>
         <View style={[styles.chip, { borderRadius: Radius.lg }]}>
-          <Text style={[styles.chipNum, { fontSize: rf(28), color: Colors.keep }]}>{totals.totalKept}</Text>
+          <Text style={[styles.chipNum, { fontSize: rf(28), color: colors.keep }]}>{totals.totalKept}</Text>
           <Text style={[styles.chipLabel, { fontSize: rf(11) }]}>KEPT</Text>
         </View>
         <View style={[styles.chip, { borderRadius: Radius.lg }]}>
-          <Text style={[styles.chipNum, { fontSize: rf(28), color: Colors.delete }]}>{totals.totalDeleted}</Text>
+          <Text style={[styles.chipNum, { fontSize: rf(28), color: colors.delete }]}>{totals.totalDeleted}</Text>
           <Text style={[styles.chipLabel, { fontSize: rf(11) }]}>DELETED</Text>
         </View>
         <View style={[styles.chip, { borderRadius: Radius.lg }]}>
-          <Text style={[styles.chipNum, { fontSize: rf(28), color: Colors.purple2 }]}>{totals.sessionCount}</Text>
+          <Text style={[styles.chipNum, { fontSize: rf(28), color: colors.purple2 }]}>{totals.sessionCount}</Text>
           <Text style={[styles.chipLabel, { fontSize: rf(11) }]}>SESSIONS</Text>
         </View>
       </View>
@@ -139,7 +142,7 @@ export default function DashboardScreen() {
                   styles.bar,
                   {
                     height: barH,
-                    backgroundColor: isActive ? Colors.purple2 : Colors.surfaceTint,
+                    backgroundColor: isActive ? colors.purple2 : colors.surfaceTint,
                     borderRadius: Radius.sm,
                   },
                 ]} />
@@ -161,19 +164,19 @@ export default function DashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg },
+const createStyles = (colors: ThemePalette) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.bg },
   content: { alignItems: 'center', gap: rh(16), paddingHorizontal: rw(20) },
 
   // Header
-  dateLabel: { alignSelf: 'flex-start', color: Colors.textMuted, fontWeight: Font.medium, letterSpacing: 0.5 },
-  pageTitle: { alignSelf: 'flex-start', fontWeight: Font.bold, color: Colors.textPrimary, marginBottom: rh(4) },
+  dateLabel: { alignSelf: 'flex-start', color: colors.textMuted, fontWeight: Font.medium, letterSpacing: 0.5 },
+  pageTitle: { alignSelf: 'flex-start', fontWeight: Font.bold, color: colors.textPrimary, marginBottom: rh(4) },
 
   // Hero card
   heroCard: {
-    backgroundColor: Colors.purple2,
+    backgroundColor: colors.purple2,
     padding: rw(24),
-    shadowColor: Colors.purple3,
+    shadowColor: colors.purple3,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 20,
@@ -181,16 +184,16 @@ const styles = StyleSheet.create({
   },
   heroLabel: { color: 'rgba(255,255,255,0.7)', fontWeight: Font.semibold, letterSpacing: 1, marginBottom: rh(4) },
   heroAmountRow: { flexDirection: 'row', alignItems: 'flex-end' },
-  heroAmount: { color: Colors.white, fontWeight: Font.extrabold, lineHeight: rh(58) },
+  heroAmount: { color: colors.white, fontWeight: Font.extrabold, lineHeight: rh(58) },
   heroUnit: { color: 'rgba(255,255,255,0.85)', fontWeight: Font.semibold, marginBottom: rh(6) },
-  trendIcon: { color: Colors.white, alignSelf: 'center' },
+  trendIcon: { color: colors.white, alignSelf: 'center' },
   heroSub: { color: 'rgba(255,255,255,0.7)', marginTop: rh(6) },
 
   // Chips
   chipsRow: { flexDirection: 'row', gap: rw(8) },
   chip: {
     flex: 1,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     paddingVertical: rh(16),
     alignItems: 'center',
     gap: rh(4),
@@ -201,11 +204,11 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   chipNum: { fontWeight: Font.extrabold },
-  chipLabel: { color: Colors.textMuted, fontWeight: Font.semibold, letterSpacing: 0.8 },
+  chipLabel: { color: colors.textMuted, fontWeight: Font.semibold, letterSpacing: 0.8 },
 
   // Chart card
   chartCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     padding: rw(20),
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -214,12 +217,12 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   chartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: rh(20) },
-  chartTitle: { fontWeight: Font.semibold, color: Colors.textPrimary },
-  chartUnit: { color: Colors.textMuted },
+  chartTitle: { fontWeight: Font.semibold, color: colors.textPrimary },
+  chartUnit: { color: colors.textMuted },
   barsRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: rw(4) },
   barCol: { alignItems: 'center', justifyContent: 'flex-end', height: '100%' },
   bar: { width: '100%' },
   dayRow: { flexDirection: 'row', justifyContent: 'space-between', gap: rw(4) },
   dayCol: { alignItems: 'center' },
-  dayLabel: { color: Colors.textMuted, fontWeight: Font.medium },
+  dayLabel: { color: colors.textMuted, fontWeight: Font.medium },
 });

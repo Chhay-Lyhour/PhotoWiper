@@ -2,7 +2,7 @@
  * ReviewScreen — photo grid of delete queue · tap to rescue · Confirm Delete
  * Design ref: Image 8
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ScrollView, useWindowDimensions,
@@ -12,7 +12,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList, SwipeRecord } from '../types';
-import { Colors, Font, Radius, rw, rh, rf } from '../constants/theme';
+import { Font, Radius, rw, rh, rf, type ThemePalette } from '../constants/theme';
+import { useTheme } from '../theme/ThemeContext';
 import { getActiveSessionId } from '../services/photoQueue';
 import { getDeleteQueue, rescuePhoto } from '../services/swipeEngine';
 import { getSession } from '../services/analyticsService';
@@ -27,6 +28,8 @@ function formatMB(bytes: number) {
 export default function ReviewScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [deleteQueue, setDeleteQueue] = useState<SwipeRecord[]>([]);
@@ -85,25 +88,25 @@ export default function ReviewScreen({ navigation }: Props) {
           <Text style={[styles.backIcon, { fontSize: rf(18) }]}>←</Text>
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { fontSize: rf(22) }]}>Review deletions</Text>
-        <View style={styles.backBtn} />
+        {/* <View style={styles.backBtn} /> */}
       </View>
 
       {/* ── Stats row ── */}
       <View style={[styles.statsRow, { paddingHorizontal: rw(20) }]}>
         <View style={[styles.statChip, { flex: 1 }]}>
-          <Text style={[styles.statNum, { fontSize: rf(28), color: Colors.delete }]}>
+          <Text style={[styles.statNum, { fontSize: rf(28), color: colors.delete }]}>
             {deleteQueue.length}
           </Text>
           <Text style={[styles.statLabel, { fontSize: rf(11) }]}>PHOTOS</Text>
         </View>
         <View style={[styles.statChip, { flex: 1 }]}>
-          <Text style={[styles.statNum, { fontSize: rf(28), color: Colors.purple2 }]}>
+          <Text style={[styles.statNum, { fontSize: rf(28), color: colors.purple2 }]}>
             {(totalBytes / 1_000_000).toFixed(1)}
           </Text>
           <Text style={[styles.statLabel, { fontSize: rf(11) }]}>MB FREED</Text>
         </View>
         <View style={[styles.statChip, { flex: 1 }]}>
-          <Text style={[styles.statNum, { fontSize: rf(28), color: Colors.keep }]}>
+          <Text style={[styles.statNum, { fontSize: rf(28), color: colors.keep }]}>
             {keptCount}
           </Text>
           <Text style={[styles.statLabel, { fontSize: rf(11) }]}>KEPT</Text>
@@ -176,8 +179,8 @@ export default function ReviewScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg },
+const createStyles = (colors: ThemePalette) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.bg },
 
   // Header
   header: {
@@ -187,22 +190,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: rw(20),
     paddingBottom: rh(16),
   },
-  backBtn: { width: rw(40), height: rw(40), alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.surface, borderRadius: Radius.full },
-  backIcon: { color: Colors.textPrimary },
-  headerTitle: { fontWeight: Font.bold, color: Colors.textPrimary },
+  backBtn: { width: rw(40), height: rw(40), alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderRadius: Radius.full },
+  backIcon: { color: colors.textPrimary },
+  headerTitle: { fontWeight: Font.bold, color: colors.textPrimary },
 
   // Stats
   statsRow: { flexDirection: 'row', gap: rw(8), marginBottom: rh(12) },
   statChip: {
-    backgroundColor: Colors.surfaceTint,
+    backgroundColor: colors.surfaceTint,
     borderRadius: Radius.lg,
     paddingVertical: rh(14),
     alignItems: 'center',
   },
   statNum: { fontWeight: Font.extrabold },
-  statLabel: { color: Colors.textMuted, fontWeight: Font.semibold, letterSpacing: 0.8, marginTop: rh(2) },
+  statLabel: { color: colors.textMuted, fontWeight: Font.semibold, letterSpacing: 0.8, marginTop: rh(2) },
 
-  hint: { color: Colors.textSecondary, marginBottom: rh(12) },
+  hint: { color: colors.textSecondary, marginBottom: rh(12) },
 
   // Grid
   scroll: { flex: 1 },
@@ -211,7 +214,7 @@ const styles = StyleSheet.create({
   cellImage: { width: '100%', height: '100%' },
   cellRescued: { opacity: 0.3 },
   emptyWrap: { width: '100%', alignItems: 'center', justifyContent: 'center', paddingVertical: rh(40) },
-  emptyText: { color: Colors.textSecondary },
+  emptyText: { color: colors.textSecondary },
   sizeTag: {
     position: 'absolute',
     bottom: rh(6),
@@ -221,30 +224,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: rw(5),
     paddingVertical: rh(2),
   },
-  sizeText: { color: Colors.white },
+  sizeText: { color: colors.white },
   xBadge: {
     position: 'absolute',
     top: rh(6),
     right: rw(6),
-    backgroundColor: Colors.delete,
+    backgroundColor: colors.delete,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  xText: { color: Colors.white, fontWeight: Font.bold },
+  xText: { color: colors.white, fontWeight: Font.bold },
   rescuedOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(34,197,94,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rescuedIcon: { color: Colors.keep },
+  rescuedIcon: { color: colors.keep },
 
   // Footer
-  footer: { paddingTop: rh(12), backgroundColor: Colors.bg },
+  footer: { paddingTop: rh(12), backgroundColor: colors.bg },
   confirmBtn: {
-    backgroundColor: Colors.purple3,
+    backgroundColor: colors.purple3,
     paddingVertical: rh(18),
     alignItems: 'center',
   },
-  confirmText: { color: Colors.white, fontWeight: Font.semibold },
+  confirmText: { color: colors.white, fontWeight: Font.semibold },
 });

@@ -2,13 +2,14 @@
  * HistoryScreen — session history list · TOTAL FREED banner
  * Design ref: Image 4
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { Colors, Font, Radius, rw, rh, rf } from '../constants/theme';
+import { Font, Radius, rw, rh, rf, type ThemePalette } from '../constants/theme';
+import { useTheme } from '../theme/ThemeContext';
 import { getSessionHistory } from '../services/analyticsService';
 import type { Session } from '../types';
 
@@ -27,6 +28,8 @@ function formatDateLabel(ts: number): string {
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const cardW = width - rw(40);
 
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -79,19 +82,19 @@ export default function HistoryScreen() {
 
                 <View style={styles.sessionStats}>
                   <View style={styles.sessionStat}>
-                    <Text style={[styles.sessionStatNum, { fontSize: rf(24), color: Colors.purple2 }]}>
+                    <Text style={[styles.sessionStatNum, { fontSize: rf(24), color: colors.purple2 }]}>
                       {reviewed}
                     </Text>
                     <Text style={[styles.sessionStatLabel, { fontSize: rf(11) }]}>REVIEWED</Text>
                   </View>
                   <View style={styles.sessionStat}>
-                    <Text style={[styles.sessionStatNum, { fontSize: rf(24), color: Colors.delete }]}>
+                    <Text style={[styles.sessionStatNum, { fontSize: rf(24), color: colors.delete }]}>
                       {sess.deletedCount}
                     </Text>
                     <Text style={[styles.sessionStatLabel, { fontSize: rf(11) }]}>DELETED</Text>
                   </View>
                   <View style={styles.sessionStat}>
-                    <Text style={[styles.sessionStatNum, { fontSize: rf(24), color: Colors.keep }]}>
+                    <Text style={[styles.sessionStatNum, { fontSize: rf(24), color: colors.keep }]}>
                       {sess.keptCount}
                     </Text>
                     <Text style={[styles.sessionStatLabel, { fontSize: rf(11) }]}>KEPT</Text>
@@ -116,18 +119,18 @@ export default function HistoryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg },
+const createStyles = (colors: ThemePalette) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.bg },
   content: { alignItems: 'center', gap: rh(14), paddingHorizontal: rw(20) },
 
   // Header
-  pageTitle: { alignSelf: 'flex-start', fontWeight: Font.bold, color: Colors.textPrimary },
-  pageSub:   { alignSelf: 'flex-start', color: Colors.textSecondary, marginBottom: rh(4) },
+  pageTitle: { alignSelf: 'flex-start', fontWeight: Font.bold, color: colors.textPrimary },
+  pageSub:   { alignSelf: 'flex-start', color: colors.textSecondary, marginBottom: rh(4) },
 
   // Cards
   cardList: { gap: rh(10), width: '100%', alignItems: 'center' },
   sessionCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     padding: rw(20),
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -141,23 +144,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: rh(14),
   },
-  sessionDate: { fontWeight: Font.semibold, color: Colors.textPrimary },
-  sessionMB:   { fontWeight: Font.semibold, color: Colors.purple2 },
+  sessionDate: { fontWeight: Font.semibold, color: colors.textPrimary },
+  sessionMB:   { fontWeight: Font.semibold, color: colors.purple2 },
 
   sessionStats: { flexDirection: 'row', justifyContent: 'space-around' },
   sessionStat:  { alignItems: 'center', gap: rh(4) },
   sessionStatNum: { fontWeight: Font.bold },
-  sessionStatLabel: { color: Colors.textMuted, fontWeight: Font.semibold, letterSpacing: 0.8 },
+  sessionStatLabel: { color: colors.textMuted, fontWeight: Font.semibold, letterSpacing: 0.8 },
 
   // Total banner
   totalBanner: {
-    backgroundColor: Colors.purple2,
+    backgroundColor: colors.purple2,
     paddingVertical: rh(20),
     alignItems: 'center',
     gap: rh(4),
     marginTop: rh(4),
   },
   totalLabel:  { color: 'rgba(255,255,255,0.7)', fontWeight: Font.semibold, letterSpacing: 1 },
-  totalAmount: { color: Colors.white, fontWeight: Font.extrabold },
-  emptyText:   { color: Colors.textSecondary, textAlign: 'center', paddingVertical: rh(24) },
+  totalAmount: { color: colors.white, fontWeight: Font.extrabold },
+  emptyText:   { color: colors.textSecondary, textAlign: 'center', paddingVertical: rh(24) },
 });
