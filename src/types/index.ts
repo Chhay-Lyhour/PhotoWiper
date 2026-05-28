@@ -55,10 +55,17 @@ export interface DailyStats {
 
 // ─── Settings ──────────────────────────────────────────────────────────────
 export type ThemeMode = 'light' | 'dark' | 'system';
+export type HapticStrength = 'subtle' | 'medium' | 'strong';
+export type SwipeSensitivity = 'easy' | 'normal' | 'firm';
 
 export interface AppSettings {
   theme: ThemeMode;
   hapticsEnabled: boolean;
+  hapticStrength: HapticStrength;
+  swipeSensitivity: SwipeSensitivity;
+  invertSwipe: boolean;
+  confirmDelete: boolean;
+  reduceMotion: boolean;
   showFileSizes: boolean;
   batchSize: number;
 }

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -7,7 +7,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import type { RootStackParamList, MainTabParamList } from '../types';
-import { Colors, Font, Radius, rw, rh } from '../constants/theme';
+import { Font, Radius, rw, rh, type ThemePalette } from '../constants/theme';
+import { useTheme } from '../theme/ThemeContext';
 
 import SplashScreen from '../screens/SplashScreen';
 import PermissionScreen from '../screens/PermissionScreen';
@@ -25,6 +26,8 @@ import SettingsScreen from '../screens/SettingsScreen';
 // ── Tab icons ─────────────────────────────────────────────────────────────
 type TabIconProps = { label: string; focused: boolean };
 function TabIcon({ label, focused }: TabIconProps) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const icons: Record<string, string> = {
     Swipe: '⊞',
     Stats: '▦',
@@ -44,14 +47,16 @@ function TabIcon({ label, focused }: TabIconProps) {
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
 function MainTabs() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarStyle: styles.tabBar,
         tabBarLabelStyle: styles.tabLabel,
-        tabBarActiveTintColor: Colors.purple3,
-        tabBarInactiveTintColor: Colors.textMuted,
+        tabBarActiveTintColor: colors.purple3,
+        tabBarInactiveTintColor: colors.textMuted,
         tabBarIcon: ({ focused }) => (
           <TabIcon label={route.name} focused={focused} />
         ),
@@ -97,10 +102,10 @@ export default function AppNavigator() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemePalette) => StyleSheet.create({
   tabBar: {
-    backgroundColor: Colors.surface,
-    borderTopColor: Colors.border,
+    backgroundColor: colors.surface,
+    borderTopColor: colors.border,
     borderTopWidth: StyleSheet.hairlineWidth,
     height: rh(84),
     paddingBottom: Platform.OS === 'ios' ? rh(20) : rh(10),
@@ -119,13 +124,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tabIconWrapActive: {
-    backgroundColor: Colors.purple3,
+    backgroundColor: colors.purple3,
   },
   tabIconGlyph: {
     fontSize: Font.lg,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   tabIconGlyphActive: {
-    color: Colors.white,
+    color: colors.white,
   },
 });
