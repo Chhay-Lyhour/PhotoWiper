@@ -1,10 +1,22 @@
 import * as MediaLibrary from 'expo-media-library';
-import * as FileSystem from 'expo-file-system';
 import type { Photo } from '../types';
 
 const PAGE_SIZE = 200;
 
+// Rough byte-per-pixel coefficient for camera photos. iOS PhotoKit omits
+// fileSize from the bulk listing, so we estimate from dimensions to keep the
+// UI/stats meaningful instead of showing "unknown". Android usually returns a
+// real number and skips this path.
+const BYTES_PER_PIXEL_ESTIMATE = 0.30;
+
+export function estimateFileSize(width?: number, height?: number): number | undefined {
+  if (!width || !height) return undefined;
+  return Math.round(width * height * BYTES_PER_PIXEL_ESTIMATE);
+}
+
 function toPhoto(asset: MediaLibrary.Asset): Photo {
+  const real = (asset as MediaLibrary.Asset & { fileSize?: number }).fileSize;
+  const fileSize = real && real > 0 ? real : estimateFileSize(asset.width, asset.height);
   return {
     id: asset.id,
     uri: asset.uri,
@@ -14,6 +26,7 @@ function toPhoto(asset: MediaLibrary.Asset): Photo {
     creationTime: asset.creationTime,
     modificationTime: asset.modificationTime,
     mediaType: asset.mediaType === 'video' ? 'video' : 'photo',
+    fileSize,
   };
 }
 
@@ -60,65 +73,6 @@ export async function fetchAll(
 
 export async function getAssetInfo(id: string) {
   return MediaLibrary.getAssetInfoAsync(id);
-}
-
-/**
- * MediaLibrary.getAssetsAsync() does not return fileSize on iOS — only
- * getAssetInfoAsync(id) does. Falls back to FileSystem.getInfoAsync on the
- * localUri if getAssetInfoAsync doesn't populate the size (e.g. iCloud-backed
- * photos that haven't been downloaded yet).
- *
- * Runs all lookups in parallel. Any individual failure leaves that photo's
- * fileSize untouched (caller's responsibility to handle undefined).
- */
-export async function enrichWithFileSize(photos: Photo[]): Promise<Photo[]> {
-  return Promise.all(
-    photos.map(async (p) => {
-      if (p.fileSize != null && p.fileSize > 0) return p;
-      try {
-        // shouldDownloadFromNetwork:false avoids a native crash on iOS when
-        // iCloud-only photos would otherwise be fetched from the network.
-        const info = await MediaLibrary.getAssetInfoAsync(p.id, {
-          shouldDownloadFromNetwork: false,
-        }) as MediaLibrary.AssetInfo & { fileSize?: number };
-
-        // DEBUG — remove once size display is verified working on device
-        console.log('[enrichSize]', p.id.slice(0, 8), {
-          mlFileSize: info.fileSize,
-          hasLocalUri: !!info.localUri,
-          origUri: p.uri.slice(0, 24),
-        });
-
-        // Primary: fileSize from MediaLibrary (bytes, available when asset is local)
-        if (info.fileSize != null && info.fileSize > 0) {
-          return { ...p, fileSize: info.fileSize };
-        }
-
-        // Fallback: measure the local file directly via FileSystem.
-        // IMPORTANT: only attempt this for file:// URIs. ph:// is iOS PhotoKit
-        // and FileSystem can't handle it — passing one can trigger a native
-        // exception that crashes the app on iOS.
-        const uri = info.localUri ?? p.uri;
-        if (uri && uri.startsWith('file://')) {
-          try {
-            const fileInfo = await FileSystem.getInfoAsync(uri);
-            const size = (fileInfo as { size?: number }).size;
-            console.log('[enrichSize fallback]', p.id.slice(0, 8), { exists: fileInfo.exists, size });
-            if (fileInfo.exists && size != null && size > 0) {
-              return { ...p, fileSize: size };
-            }
-          } catch (fsErr) {
-            console.warn('[enrichSize FS error]', p.id.slice(0, 8), (fsErr as Error).message);
-          }
-        }
-
-        return p;
-      } catch (err) {
-        console.warn('[enrichSize ML error]', p.id.slice(0, 8), (err as Error).message);
-        return p;
-      }
-    }),
-  );
 }
 
 export async function deletePhotos(photoIds: string[]): Promise<boolean> {
