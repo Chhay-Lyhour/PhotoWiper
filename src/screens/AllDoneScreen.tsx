@@ -12,6 +12,7 @@ import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types';
 import { Font, Radius, rw, rh, rf, type ThemePalette } from '../constants/theme';
 import { useTheme } from '../theme/ThemeContext';
+import { useStore } from '../store/useStore';
 
 type Props = StackScreenProps<RootStackParamList, 'AllDone'>;
 
@@ -21,11 +22,14 @@ export default function AllDoneScreen({ route, navigation }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { stats } = route.params;
+  const reduceMotion = useStore((s) => s.settings.reduceMotion);
 
-  const fadeAnim  = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.7)).current;
+  // When motion is reduced, start at the final state so there's no spring/fade.
+  const fadeAnim  = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
+  const scaleAnim = useRef(new Animated.Value(reduceMotion ? 1 : 0.7)).current;
 
   useEffect(() => {
+    if (reduceMotion) return;
     Animated.parallel([
       Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, damping: 12, stiffness: 100 }),
       Animated.timing(fadeAnim,  { toValue: 1, duration: 500, useNativeDriver: true }),

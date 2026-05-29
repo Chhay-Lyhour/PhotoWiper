@@ -97,7 +97,10 @@ export async function startSession(maxPhotos: number = DEFAULT_SESSION_SIZE): Pr
      ORDER BY p.creation_time DESC`,
   );
 
-  const picked = shuffle(candidates.map((c) => c.id)).slice(0, maxPhotos);
+  // A size of 0 (or falsy) is the "All photos" sentinel from settings — review
+  // the entire remaining library in one session instead of capping the batch.
+  const limit = maxPhotos > 0 ? maxPhotos : candidates.length;
+  const picked = shuffle(candidates.map((c) => c.id)).slice(0, limit);
 
   await withTransaction(async (tx) => {
     await tx.runAsync(

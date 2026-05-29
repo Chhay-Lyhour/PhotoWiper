@@ -14,6 +14,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { indexLibrary } from '../services/photoQueue';
 import { startSession } from '../services/photoQueue';
+import { checkPhotoPermission, isUsable } from '../services/permissions';
 
 type Props = StackScreenProps<RootStackParamList, 'Loading'>;
 
@@ -25,14 +26,18 @@ export default function LoadingScreen({ navigation }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { loadingCount, loadingStatus } = useStore();
+  const reduceMotion = useStore((s) => s.settings.reduceMotion);
   const barAnim = useRef(new Animated.Value(0)).current;
   const spinAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.loop(
+    if (reduceMotion) return; // keep the spinner static when motion is reduced
+    const loop = Animated.loop(
       Animated.timing(spinAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
-    ).start();
-  }, []);
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [reduceMotion]);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,6 +48,16 @@ export default function LoadingScreen({ navigation }: Props) {
 
     (async () => {
       try {
+        // Re-verify access before touching the library. If the grant isn't
+        // usable (denied/blocked), route to Denied with a clear path rather
+        // than letting getAssetsAsync throw a cryptic native error below.
+        const { state } = await checkPhotoPermission();
+        if (!isUsable(state)) {
+          console.warn('[Loading] photo permission not usable:', state);
+          if (!cancelled) navigation.replace('Denied');
+          return;
+        }
+
         const total = await indexLibrary(({ fetched, total }) => {
           if (cancelled) return;
           const s = useStore.getState();
@@ -59,7 +74,7 @@ export default function LoadingScreen({ navigation }: Props) {
         useStore.getState().setLoadingStatus(STATUS_STEPS[2]);
         Animated.timing(barAnim, { toValue: 0.95, duration: 200, useNativeDriver: false }).start();
 
-        await startSession();
+        await startSession(useStore.getState().settings.batchSize);
         if (cancelled) return;
 
         Animated.timing(barAnim, { toValue: 1, duration: 200, useNativeDriver: false }).start();
@@ -70,7 +85,9 @@ export default function LoadingScreen({ navigation }: Props) {
           if (!cancelled) navigation.replace('MainTabs');
         }, 400);
       } catch (err) {
-        console.warn('[Loading] indexLibrary failed:', err);
+        // Surface the real failure so Android issues can be diagnosed on-device
+        // (e.g. getAssetsAsync throwing under a partial/limited grant).
+        console.warn('[Loading] gallery scan failed:', (err as Error)?.message ?? err);
         if (!cancelled) navigation.replace('Denied');
       }
     })();
