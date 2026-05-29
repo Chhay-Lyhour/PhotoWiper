@@ -83,13 +83,13 @@ export default function ReviewScreen({ navigation }: Props) {
 
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
-      {/* ── Header ── */}s
+      {/* ── Header ── */}
       <View style={[styles.header, { paddingTop: insets.top + rh(16) }]}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="chevron-back" size={rf(22)} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { fontSize: rf(22) }]}>Review deletions</Text>
-        <View style={styles.backBtn} />
+        <View style={[styles.backBtn, { backgroundColor: 'transparent' }]} />
       </View>
 
       {/* ── Stats row ── */}
