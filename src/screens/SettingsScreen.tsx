@@ -26,6 +26,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { haptics } from '../services/hapticsService';
 import { resetDatabase } from '../services/databaseService';
+import { checkPhotoPermission, type PermissionState } from '../services/permissions';
 import type {
   ThemeMode, HapticStrength, SwipeSensitivity, AppSettings, RootStackParamList,
 } from '../types';
@@ -73,16 +74,16 @@ export default function SettingsScreen() {
   const updateSettings = useStore((s) => s.updateSettings);
   const navigation = useNavigation<Nav>();
 
-  const [photoPermStatus, setPhotoPermStatus] = useState<MediaLibrary.PermissionStatus | null>(null);
+  const [permState, setPermState] = useState<PermissionState | null>(null);
   const [helpVisible, setHelpVisible] = useState(false);
   const [privacyVisible, setPrivacyVisible] = useState(false);
 
   const checkPermissions = useCallback(async () => {
     try {
-      const perm = await MediaLibrary.getPermissionsAsync();
-      setPhotoPermStatus(perm.status);
+      const { state } = await checkPhotoPermission();
+      setPermState(state);
     } catch (e) {
-      console.warn('[settings] getPermissionsAsync failed:', e);
+      console.warn('[settings] checkPhotoPermission failed:', e);
     }
   }, []);
 
@@ -121,6 +122,18 @@ export default function SettingsScreen() {
     Linking.openSettings();
   }, []);
 
+  // Limited access (selected photos): let the user add more without leaving the
+  // app. The system picker only appears when access was originally limited.
+  const handleManageSelection = useCallback(async () => {
+    haptics.buttonTap();
+    try {
+      await MediaLibrary.presentPermissionsPickerAsync();
+      await checkPermissions();
+    } catch (e) {
+      console.warn('[settings] presentPermissionsPickerAsync failed:', e);
+    }
+  }, [checkPermissions]);
+
   const cardW = width - rw(40);
 
   const setSetting = <K extends keyof AppSettings>(key: K, val: AppSettings[K]) => {
@@ -129,14 +142,16 @@ export default function SettingsScreen() {
   };
 
   const permLabel =
-    photoPermStatus === MediaLibrary.PermissionStatus.GRANTED  ? 'Full access' :
-    photoPermStatus === MediaLibrary.PermissionStatus.DENIED   ? 'Not allowed' :
-    photoPermStatus === MediaLibrary.PermissionStatus.UNDETERMINED ? 'Not set up' :
+    permState === 'granted' ? 'Full access' :
+    permState === 'limited' ? 'Limited access' :
+    permState === 'denied' || permState === 'blocked' ? 'Not allowed' :
+    permState === 'undetermined' ? 'Not set up' :
     'Checking…';
 
   const permBadgeColor =
-    photoPermStatus === MediaLibrary.PermissionStatus.GRANTED  ? colors.keep :
-    photoPermStatus === MediaLibrary.PermissionStatus.DENIED   ? colors.delete :
+    permState === 'granted' ? colors.keep :
+    permState === 'limited' ? '#F59E0B' :
+    permState === 'denied' || permState === 'blocked' ? colors.delete :
     colors.textMuted;
 
   return (
@@ -253,9 +268,11 @@ export default function SettingsScreen() {
             <View style={{ flex: 1 }}>
               <Text style={[styles.rowLabel, { fontSize: rf(16) }]}>Photo Library</Text>
               <Text style={[styles.rowSubLabel, { fontSize: rf(13) }]}>
-                {photoPermStatus === 'denied'
+                {permState === 'denied' || permState === 'blocked'
                   ? 'Tap to allow access in settings'
-                  : 'Manage in device settings'}
+                  : permState === 'limited'
+                    ? 'Only selected photos are visible'
+                    : 'Manage in device settings'}
               </Text>
             </View>
             <View style={[styles.permBadge, { backgroundColor: permBadgeColor + '22' }]}>
@@ -265,6 +282,13 @@ export default function SettingsScreen() {
             </View>
             <Ionicons name="chevron-forward" size={rf(16)} color={styles._chevronColor} />
           </TouchableOpacity>
+          {permState === 'limited' && (
+            <TouchableOpacity style={styles.row} activeOpacity={0.6} onPress={handleManageSelection}>
+              <IconBox styles={styles} icon="albums-outline" />
+              <Text style={[styles.rowLabel, { fontSize: rf(16) }]}>Manage selected photos</Text>
+              <Ionicons name="add-circle-outline" size={rf(16)} color={styles._chevronColor} />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={styles.row} activeOpacity={0.6} onPress={() => Linking.openSettings()}>
             <IconBox styles={styles} icon="settings-outline" />
             <Text style={[styles.rowLabel, { fontSize: rf(16) }]}>Open device settings</Text>

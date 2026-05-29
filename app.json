@@ -2,6 +2,7 @@
   "expo": {
     "name": "PhotoSwipe",
     "slug": "PhotoSwipe",
+    "owner": "chhay-lyhour425",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -22,7 +23,15 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -36,7 +45,13 @@
           "savePhotosPermission": "PhotoSwipe needs permission to manage photos you choose to delete.",
           "isAccessMediaLocationEnabled": false
         }
-      ]
-    ]
+      ],
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "8942c113-7b0e-4e73-b3ef-660362f7d0ef"
+      }
+    }
   }
 }
