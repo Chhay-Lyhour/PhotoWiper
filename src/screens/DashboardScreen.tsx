@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { Font, Radius, rw, rh, rf, type ThemePalette } from '../constants/theme';
 import { useTheme } from '../theme/ThemeContext';
 import { getLifetimeTotals, getDailyStats, type LifetimeTotals } from '../services/analyticsService';
@@ -101,7 +102,7 @@ export default function DashboardScreen() {
           <Text style={[styles.heroAmount, { fontSize: rf(52) }]}>{storageMB}</Text>
           <Text style={[styles.heroUnit, { fontSize: rf(22) }]}> MB</Text>
           <View style={{ flex: 1 }} />
-          <Text style={[styles.trendIcon, { fontSize: rf(22) }]}>↗</Text>
+          <Ionicons name="trending-up" size={rf(22)} color={colors.white} style={styles.trendIcon} />
         </View>
         <Text style={[styles.heroSub, { fontSize: rf(14) }]}>
           {reviewedToday} photos reviewed today

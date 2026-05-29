@@ -1,10 +1,11 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Ionicons } from '@expo/vector-icons';
 
 import type { RootStackParamList, MainTabParamList } from '../types';
 import { Font, Radius, rw, rh, type ThemePalette } from '../constants/theme';
@@ -25,20 +26,24 @@ import SettingsScreen from '../screens/SettingsScreen';
 
 // ── Tab icons ─────────────────────────────────────────────────────────────
 type TabIconProps = { label: string; focused: boolean };
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 function TabIcon({ label, focused }: TabIconProps) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const icons: Record<string, string> = {
-    Swipe: '⊞',
-    Stats: '▦',
-    History: '◷',
-    Settings: '⚙',
+  const icons: Record<string, { on: IoniconName; off: IoniconName }> = {
+    Swipe:    { on: 'albums',       off: 'albums-outline' },
+    Stats:    { on: 'stats-chart',  off: 'stats-chart-outline' },
+    History:  { on: 'time',         off: 'time-outline' },
+    Settings: { on: 'settings',     off: 'settings-outline' },
   };
+  const icon = icons[label] ?? { on: 'ellipse', off: 'ellipse-outline' };
   return (
     <View style={[styles.tabIconWrap, focused && styles.tabIconWrapActive]}>
-      <Text style={[styles.tabIconGlyph, focused && styles.tabIconGlyphActive]}>
-        {icons[label] ?? '●'}
-      </Text>
+      <Ionicons
+        name={focused ? icon.on : icon.off}
+        size={Font.lg}
+        color={focused ? colors.white : colors.textMuted}
+      />
     </View>
   );
 }
@@ -125,12 +130,5 @@ const createStyles = (colors: ThemePalette) => StyleSheet.create({
   },
   tabIconWrapActive: {
     backgroundColor: colors.purple3,
-  },
-  tabIconGlyph: {
-    fontSize: Font.lg,
-    color: colors.textMuted,
-  },
-  tabIconGlyphActive: {
-    color: colors.white,
   },
 });

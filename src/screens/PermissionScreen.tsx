@@ -12,6 +12,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types';
 import { Font, Radius, rw, rh, rf, type ThemePalette } from '../constants/theme';
@@ -55,7 +56,7 @@ export default function PermissionScreen({ navigation }: Props) {
       <View style={styles.inner}>
         {/* Icon */}
         <View style={[styles.iconBox, { width: rw(80), height: rw(80), borderRadius: rw(20) }]}>
-          <Text style={[styles.iconGlyph, { fontSize: rf(38) }]}>🖼</Text>
+          <Ionicons name="images-outline" size={rf(38)} color={colors.white} />
         </View>
 
         {/* Title */}
@@ -73,7 +74,7 @@ export default function PermissionScreen({ navigation }: Props) {
           {CHECKS.map((item, i) => (
             <View key={i} style={styles.checkRow}>
               <View style={styles.checkBadge}>
-                <Text style={[styles.checkMark, { fontSize: rf(13) }]}>✓</Text>
+                <Ionicons name="checkmark" size={rf(15)} color={colors.white} />
               </View>
               <Text style={[styles.checkText, { fontSize: rf(16) }]}>{item}</Text>
             </View>

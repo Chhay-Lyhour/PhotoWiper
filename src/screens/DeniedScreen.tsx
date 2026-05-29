@@ -14,6 +14,7 @@ import {
   type AppStateStatus,
   useWindowDimensions,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { StackScreenProps } from '@react-navigation/stack';
@@ -82,7 +83,7 @@ export default function DeniedScreen({ navigation }: Props) {
       <View style={styles.inner}>
         {/* Lock icon */}
         <View style={[styles.iconBox, { width: rw(80), height: rw(80), borderRadius: rw(20) }]}>
-          <Text style={[styles.iconGlyph, { fontSize: rf(38) }]}>🔒</Text>
+          <Ionicons name="lock-closed" size={rf(38)} color={colors.white} />
         </View>
 
         {/* Title */}
@@ -110,7 +111,7 @@ export default function DeniedScreen({ navigation }: Props) {
 
         {/* Privacy note */}
         <View style={styles.privacyRow}>
-          <Text style={[styles.privacyIcon, { fontSize: rf(14) }]}>🛡</Text>
+          <Ionicons name="shield-checkmark-outline" size={rf(14)} color={colors.textMuted} />
           <Text style={[styles.privacyText, { fontSize: rf(13) }]}>
             Photos stay private on your device
           </Text>
@@ -136,14 +137,18 @@ export default function DeniedScreen({ navigation }: Props) {
           activeOpacity={0.85}
           disabled={checking}
         >
-          <Text style={[styles.settingsBtnIcon, { fontSize: rf(17) }]}>⚙</Text>
-          <Text style={[styles.settingsBtnText, { fontSize: rf(17) }]}>Open Settings →</Text>
+          <Ionicons name="settings-outline" size={rf(17)} color={colors.white} />
+          <Text style={[styles.settingsBtnText, { fontSize: rf(17) }]}>Open Settings</Text>
+          <Ionicons name="arrow-forward" size={rf(17)} color={colors.white} />
         </TouchableOpacity>
 
         {/* Re-check link */}
         <TouchableOpacity onPress={handleRecheck} style={styles.recheckBtn} disabled={checking}>
+          {!checking && (
+            <Ionicons name="refresh" size={rf(15)} color={colors.purple3} />
+          )}
           <Text style={[styles.recheckText, { fontSize: rf(15) }]}>
-            {checking ? 'Checking…' : '↻  I\'ve enabled it — re-check'}
+            {checking ? 'Checking…' : "I've enabled it — re-check"}
           </Text>
         </TouchableOpacity>
       </View>
@@ -258,6 +263,10 @@ const createStyles = (colors: ThemePalette) => StyleSheet.create({
     fontWeight: Font.semibold,
   },
   recheckBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: rw(6),
     paddingVertical: rh(10),
     paddingHorizontal: rw(24),
   },
