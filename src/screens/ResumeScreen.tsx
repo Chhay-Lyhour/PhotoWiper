@@ -6,6 +6,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types';
 import { Font, Radius, rw, rh, rf, type ThemePalette } from '../constants/theme';
@@ -80,7 +81,7 @@ export default function ResumeScreen({ navigation, route }: Props) {
       <View style={styles.inner}>
         {/* Icon */}
         <View style={[styles.iconBox, { width: rw(88), height: rw(88), borderRadius: rw(22) }]}>
-          <Text style={[styles.iconGlyph, { fontSize: rf(42) }]}>↻</Text>
+          <Ionicons name="refresh" size={rf(42)} color={colors.purple3} />
         </View>
 
         <Text style={[styles.title, { fontSize: rf(30) }]}>Session found</Text>
@@ -110,7 +111,8 @@ export default function ResumeScreen({ navigation, route }: Props) {
           activeOpacity={0.85}
           disabled={busy}
         >
-          <Text style={[styles.resumeText, { fontSize: rf(17) }]}>↻  Resume session</Text>
+          <Ionicons name="refresh" size={rf(18)} color={colors.white} />
+          <Text style={[styles.resumeText, { fontSize: rf(17) }]}>Resume session</Text>
         </TouchableOpacity>
 
         {/* Start fresh */}
@@ -141,7 +143,7 @@ const createStyles = (colors: ThemePalette) => StyleSheet.create({
   cardLabel: { color: colors.textMuted, fontWeight: Font.semibold, letterSpacing: 0.8 },
   cardValue: { fontWeight: Font.bold },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: rh(4) },
-  resumeBtn: { backgroundColor: colors.purple3, paddingVertical: rh(18), alignItems: 'center', marginBottom: rh(12) },
+  resumeBtn: { backgroundColor: colors.purple3, paddingVertical: rh(18), flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: rw(8), marginBottom: rh(12) },
   resumeText: { color: colors.white, fontWeight: Font.semibold },
   freshBtn: { backgroundColor: colors.surface, paddingVertical: rh(18), alignItems: 'center', borderWidth: 1.5, borderColor: colors.border },
   freshText: { color: colors.textSecondary, fontWeight: Font.medium },

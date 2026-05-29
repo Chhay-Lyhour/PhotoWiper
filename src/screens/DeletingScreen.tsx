@@ -7,6 +7,7 @@ import {
   View, Text, StyleSheet, Animated, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types';
 import { Font, Radius, rw, rh, rf, type ThemePalette } from '../constants/theme';
@@ -116,7 +117,7 @@ export default function DeletingScreen({ navigation }: Props) {
           { width: rw(120), height: rw(120), borderRadius: rw(60), transform: [{ scale: pulseAnim }] },
         ]}
       >
-        <Text style={[styles.iconGlyph, { fontSize: rf(52) }]}>🗑</Text>
+        <Ionicons name="trash" size={rf(52)} color={colors.white} />
       </Animated.View>
 
       <Text style={[styles.title, { fontSize: rf(28) }]}>Deleting photos…</Text>

@@ -8,6 +8,7 @@ import {
   ScrollView, useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import type { StackScreenProps } from '@react-navigation/stack';
@@ -85,7 +86,7 @@ export default function ReviewScreen({ navigation }: Props) {
       {/* ── Header ── */}
       <View style={[styles.header, { paddingTop: insets.top + rh(16) }]}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Text style={[styles.backIcon, { fontSize: rf(18) }]}>←</Text>
+          <Ionicons name="chevron-back" size={rf(22)} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { fontSize: rf(22) }]}>Review deletions</Text>
         {/* <View style={styles.backBtn} /> */}
@@ -155,7 +156,7 @@ export default function ReviewScreen({ navigation }: Props) {
                 </View>
               )}
               <View style={[styles.xBadge, { width: rw(22), height: rw(22), borderRadius: Radius.full }]}>
-                <Text style={[styles.xText, { fontSize: rf(12) }]}>✕</Text>
+                <Ionicons name="close" size={rf(14)} color={colors.white} />
               </View>
             </TouchableOpacity>
           ))

@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -387,7 +388,7 @@ export default function SwipeScreen() {
           onPress={handleReview}
           activeOpacity={0.85}
         >
-          <Text style={[styles.badgeBtnIcon, { fontSize: rf(20) }]}>✓</Text>
+          <Ionicons name="checkmark" size={rf(20)} color={colors.white} />
           {deleteCount > 0 && (
             <View style={styles.badge}>
               <Text style={[styles.badgeText, { fontSize: rf(11) }]}>{deleteCount}</Text>
@@ -495,7 +496,7 @@ export default function SwipeScreen() {
             {deleteCount > 0 ? (
               // 1. Pending deletes — review them first
               <>
-                <Text style={[styles.emptyEmoji, { fontSize: rf(44) }]}>✦✦{'\n'}✦</Text>
+                <Ionicons name="sparkles" size={rf(44)} color="#F59E0B" style={styles.emptyEmoji} />
                 <Text style={[styles.emptyTitle, { fontSize: rf(24) }]}>All caught up</Text>
                 <Text style={[styles.emptySubtitle, { fontSize: rf(15) }]}>
                   Review your deletions to free up storage.
@@ -513,7 +514,7 @@ export default function SwipeScreen() {
             ) : remainingInLibrary !== null && remainingInLibrary > 0 ? (
               // 2. More photos available — offer to load another batch
               <>
-                <Text style={[styles.emptyEmoji, { fontSize: rf(44) }]}>📸</Text>
+                <Ionicons name="camera-outline" size={rf(44)} color="#F59E0B" style={styles.emptyEmoji} />
                 <Text style={[styles.emptyTitle, { fontSize: rf(24) }]}>Nice work!</Text>
                 <Text style={[styles.emptySubtitle, { fontSize: rf(15) }]}>
                   You reviewed {total} photos. {remainingInLibrary} more waiting.
@@ -532,7 +533,7 @@ export default function SwipeScreen() {
             ) : (
               // 3. Library fully reviewed — celebrate
               <>
-                <Text style={[styles.emptyEmoji, { fontSize: rf(44) }]}>🎉</Text>
+                <Ionicons name="trophy-outline" size={rf(44)} color="#F59E0B" style={styles.emptyEmoji} />
                 <Text style={[styles.emptyTitle, { fontSize: rf(24) }]}>Library cleaned!</Text>
                 <Text style={[styles.emptySubtitle, { fontSize: rf(15) }]}>
                   You've reviewed every photo in your library.
@@ -551,7 +552,7 @@ export default function SwipeScreen() {
           activeOpacity={0.8}
           disabled={isEmpty}
         >
-          <Text style={[styles.actionX, { fontSize: rf(24) }]}>✕</Text>
+          <Ionicons name="close" size={rf(24)} color={colors.delete} />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -559,7 +560,7 @@ export default function SwipeScreen() {
           onPress={handleUndo}
           activeOpacity={0.8}
         >
-          <Text style={[styles.actionUndo, { fontSize: rf(20) }]}>↺</Text>
+          <Ionicons name="arrow-undo" size={rf(20)} color={colors.textSecondary} />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -568,7 +569,7 @@ export default function SwipeScreen() {
           activeOpacity={0.8}
           disabled={isEmpty}
         >
-          <Text style={[styles.actionHeart, { fontSize: rf(26) }]}>♥</Text>
+          <Ionicons name="heart" size={rf(26)} color={colors.white} />
         </TouchableOpacity>
       </View>
     </View>

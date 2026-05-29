@@ -13,6 +13,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types';
 import { Font, Radius, rw, rh, rf, type ThemePalette } from '../constants/theme';
@@ -67,7 +68,7 @@ export default function SplashScreen({ navigation }: Props) {
       <Animated.View style={[styles.content, { opacity, transform: [{ translateY: slideY }] }]}>
         {/* Logo icon */}
         <View style={[styles.iconContainer, { width: iconSize, height: iconSize, borderRadius: rw(28) }]}>
-          <Text style={[styles.iconGlyph, { fontSize: rf(52) }]}>✦</Text>
+          <Ionicons name="sparkles" size={rf(52)} color={colors.white} />
           <Text style={[styles.iconPlus, { fontSize: rf(22) }]}>+</Text>
         </View>
 
