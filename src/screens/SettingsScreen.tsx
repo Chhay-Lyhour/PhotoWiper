@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, CommonActions, useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
+import { Ionicons } from '@expo/vector-icons';
 import { Font, Radius, rw, rh, rf, type ThemePalette } from '../constants/theme';
 import { useTheme } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
@@ -27,6 +28,7 @@ import type {
 } from '../types';
 
 type Nav = StackNavigationProp<RootStackParamList>;
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
 function formatRelative(ts: number | null): string {
   if (!ts) return 'never';
@@ -144,7 +146,7 @@ export default function SettingsScreen() {
       <View style={[styles.card, { width: cardW, borderRadius: Radius.xl }]}>
         <PickerRow
           styles={styles}
-          icon="🎨"
+          icon="color-palette-outline"
           label="Theme"
           value={settings.theme}
           options={THEME_OPTIONS}
@@ -152,7 +154,7 @@ export default function SettingsScreen() {
         />
         <ToggleRow
           styles={styles}
-          icon="🌀"
+          icon="pulse-outline"
           label="Reduce motion"
           value={settings.reduceMotion}
           onChange={(v) => setSetting('reduceMotion', v)}
@@ -164,7 +166,7 @@ export default function SettingsScreen() {
       <View style={[styles.card, { width: cardW, borderRadius: Radius.xl }]}>
         <ToggleRow
           styles={styles}
-          icon="📳"
+          icon="phone-portrait-outline"
           label="Haptic feedback"
           value={settings.hapticsEnabled}
           onChange={(v) => setSetting('hapticsEnabled', v)}
@@ -172,7 +174,7 @@ export default function SettingsScreen() {
         {settings.hapticsEnabled && (
           <PickerRow
             styles={styles}
-            icon="📶"
+            icon="cellular-outline"
             label="Strength"
             value={settings.hapticStrength}
             options={HAPTIC_OPTIONS}
@@ -190,7 +192,7 @@ export default function SettingsScreen() {
       <View style={[styles.card, { width: cardW, borderRadius: Radius.xl }]}>
         <PickerRow
           styles={styles}
-          icon="👆"
+          icon="finger-print-outline"
           label="Sensitivity"
           value={settings.swipeSensitivity}
           options={SENSITIVITY_OPTIONS}
@@ -198,14 +200,14 @@ export default function SettingsScreen() {
         />
         <ToggleRow
           styles={styles}
-          icon="🔁"
+          icon="swap-horizontal-outline"
           label="Invert directions"
           value={settings.invertSwipe}
           onChange={(v) => setSetting('invertSwipe', v)}
         />
         <ToggleRow
           styles={styles}
-          icon="⚠️"
+          icon="warning-outline"
           label="Confirm before delete"
           value={settings.confirmDelete}
           onChange={(v) => setSetting('confirmDelete', v)}
@@ -216,7 +218,7 @@ export default function SettingsScreen() {
       <SectionTitle styles={styles}>Sync &amp; Data</SectionTitle>
       <View style={[styles.card, { width: cardW, borderRadius: Radius.xl }]}>
         <View style={styles.row}>
-          <IconBox styles={styles} icon="☁️" />
+          <IconBox styles={styles} icon="cloud-outline" />
           <View style={{ flex: 1 }}>
             <Text style={[styles.rowLabel, { fontSize: rf(16) }]}>Sync status</Text>
             <Text style={[styles.rowSubLabel, { fontSize: rf(13) }]}>
@@ -232,14 +234,14 @@ export default function SettingsScreen() {
           onPress={handleSyncNow}
           disabled={syncing}
         >
-          <IconBox styles={styles} icon="🔄" />
+          <IconBox styles={styles} icon="sync-outline" />
           <Text style={[styles.rowLabel, { fontSize: rf(16) }]}>
             {syncing ? 'Syncing…' : 'Sync now'}
           </Text>
           {syncing ? (
             <ActivityIndicator color={colors.purple2} />
           ) : (
-            <Text style={[styles.chevron, { fontSize: rf(16) }]}>›</Text>
+            <Ionicons name="chevron-forward" size={rf(16)} color={colors.textMuted} />
           )}
         </TouchableOpacity>
         <TouchableOpacity
@@ -247,26 +249,29 @@ export default function SettingsScreen() {
           activeOpacity={0.6}
           onPress={handleClearData}
         >
-          <IconBox styles={styles} icon="🗑️" />
+          <IconBox styles={styles} icon="trash-outline" color={colors.delete} />
           <Text style={[styles.rowLabel, { fontSize: rf(16), color: colors.delete }]}>
             Clear local data
           </Text>
-          <Text style={[styles.chevron, { fontSize: rf(16) }]}>›</Text>
+          <Ionicons name="chevron-forward" size={rf(16)} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
 
       {/* ── About ── */}
       <SectionTitle styles={styles}>About</SectionTitle>
       <View style={[styles.card, { width: cardW, borderRadius: Radius.xl }]}>
-        <ArrowRow styles={styles} icon="⭐" label="Rate PhotoSwipe" />
-        <ArrowRow styles={styles} icon="❓" label="Help & support" />
-        <ArrowRow styles={styles} icon="🛡" label="Privacy" />
+        <ArrowRow styles={styles} icon="star-outline" label="Rate PhotoSwipe" />
+        <ArrowRow styles={styles} icon="help-circle-outline" label="Help & support" />
+        <ArrowRow styles={styles} icon="shield-checkmark-outline" label="Privacy" />
       </View>
 
       <View style={styles.footer}>
-        <Text style={[styles.footerText, { fontSize: rf(13) }]}>
-          PhotoSwipe v1.0 · Made with 💜
-        </Text>
+        <View style={styles.footerRow}>
+          <Text style={[styles.footerText, { fontSize: rf(13) }]}>
+            PhotoSwipe v1.0 · Made with
+          </Text>
+          <Ionicons name="heart" size={rf(13)} color={colors.purple3} />
+        </View>
       </View>
     </ScrollView>
   );
@@ -286,10 +291,10 @@ function SectionTitle({ styles, children }: StylesProp & { children: React.React
   );
 }
 
-function IconBox({ styles, icon }: StylesProp & { icon: string }) {
+function IconBox({ styles, icon, color }: StylesProp & { icon: IoniconName; color?: string }) {
   return (
     <View style={[styles.iconBox, { width: rw(36), height: rw(36), borderRadius: Radius.md }]}>
-      <Text style={[styles.rowIcon, { fontSize: rf(16) }]}>{icon}</Text>
+      <Ionicons name={icon} size={rf(18)} color={color ?? styles._iconColor} />
     </View>
   );
 }
@@ -297,7 +302,7 @@ function IconBox({ styles, icon }: StylesProp & { icon: string }) {
 function ToggleRow({
   styles, icon, label, value, onChange,
 }: StylesProp & {
-  icon: string;
+  icon: IoniconName;
   label: string;
   value: boolean;
   onChange: (v: boolean) => void;
@@ -319,7 +324,7 @@ function ToggleRow({
 function PickerRow<T extends string>({
   styles, icon, label, value, options, onChange,
 }: StylesProp & {
-  icon: string;
+  icon: IoniconName;
   label: string;
   value: T;
   options: Option<T>[];
@@ -354,12 +359,12 @@ function PickerRow<T extends string>({
   );
 }
 
-function ArrowRow({ styles, icon, label }: StylesProp & { icon: string; label: string }) {
+function ArrowRow({ styles, icon, label }: StylesProp & { icon: IoniconName; label: string }) {
   return (
     <TouchableOpacity style={styles.row} activeOpacity={0.6} onPress={haptics.selection}>
       <IconBox styles={styles} icon={icon} />
       <Text style={[styles.rowLabel, { fontSize: rf(16) }]}>{label}</Text>
-      <Text style={[styles.chevron, { fontSize: rf(16) }]}>›</Text>
+      <Ionicons name="chevron-forward" size={rf(16)} color={styles._chevronColor} />
     </TouchableOpacity>
   );
 }
@@ -426,7 +431,6 @@ const createStyles = (colors: ThemePalette) => {
       alignItems: 'center',
       justifyContent: 'center',
     },
-    rowIcon: {},
     rowLabel: {
       flex: 1,
       color: colors.textPrimary,
@@ -435,10 +439,6 @@ const createStyles = (colors: ThemePalette) => {
     rowSubLabel: {
       color: colors.textSecondary,
       marginTop: rh(2),
-    },
-    chevron: {
-      color: colors.textMuted,
-      fontWeight: Font.semibold,
     },
 
     // Segmented picker
@@ -479,6 +479,7 @@ const createStyles = (colors: ThemePalette) => {
       paddingTop: rh(12),
       width: '100%',
     },
+    footerRow: { flexDirection: 'row', alignItems: 'center', gap: rw(5) },
     footerText: { color: colors.textMuted },
   });
 
@@ -487,5 +488,7 @@ const createStyles = (colors: ThemePalette) => {
     _toggleTrackOff: colors.border,
     _toggleTrackOn: colors.purple2,
     _toggleThumb: colors.white,
+    _iconColor: colors.purple3,
+    _chevronColor: colors.textMuted,
   };
 };

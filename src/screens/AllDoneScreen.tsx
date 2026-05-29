@@ -112,7 +112,7 @@ export default function AllDoneScreen({ route, navigation }: Props) {
           onPress={handleViewStats}
           activeOpacity={0.85}
         >
-          <Text style={[styles.viewStatsBtnIcon, { fontSize: rf(18) }]}>▦</Text>
+          <Ionicons name="stats-chart" size={rf(18)} color={colors.white} />
           <Text style={[styles.viewStatsBtnText, { fontSize: rf(17) }]}>View Stats</Text>
         </TouchableOpacity>
       </Animated.View>
