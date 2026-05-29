@@ -2,14 +2,15 @@
  * DeletingScreen — trash icon · progress bar · "X of Y deleted"
  * Design ref: Image 3
  */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
   View, Text, StyleSheet, Animated, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types';
-import { Colors, Font, Radius, rw, rh, rf } from '../constants/theme';
+import { Font, Radius, rw, rh, rf, type ThemePalette } from '../constants/theme';
+import { useTheme } from '../theme/ThemeContext';
 import { getActiveSessionId } from '../services/photoQueue';
 import { getDeleteQueueIds, completeSession } from '../services/swipeEngine';
 import { deletePhotos } from '../services/mediaLibraryService';
@@ -20,6 +21,8 @@ type Props = StackScreenProps<RootStackParamList, 'Deleting'>;
 export default function DeletingScreen({ navigation }: Props) {
   const insets  = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const barAnim   = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -132,46 +135,46 @@ export default function DeletingScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemePalette) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.bg,
+    backgroundColor: colors.bg,
     alignItems: 'center',
     justifyContent: 'center',
     gap: rh(16),
   },
   iconCircle: {
-    backgroundColor: Colors.purple2,
+    backgroundColor: colors.purple2,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: rh(8),
-    shadowColor: Colors.purple3,
+    shadowColor: colors.purple3,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.4,
     shadowRadius: 20,
     elevation: 10,
   },
   iconGlyph: {},
-  title: { fontWeight: Font.bold, color: Colors.textPrimary },
+  title: { fontWeight: Font.bold, color: colors.textPrimary },
   subtitle: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
     paddingHorizontal: rw(40),
     lineHeight: rh(24),
   },
   barTrack: {
     height: rh(6),
-    backgroundColor: Colors.surfaceTint,
+    backgroundColor: colors.surfaceTint,
     borderRadius: Radius.full,
     overflow: 'hidden',
   },
   barFill: {
     height: '100%',
-    backgroundColor: Colors.purple2,
+    backgroundColor: colors.purple2,
     borderRadius: Radius.full,
   },
   counter: {
-    color: Colors.purple3,
+    color: colors.purple3,
     fontWeight: Font.semibold,
   },
 });

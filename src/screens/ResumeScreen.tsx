@@ -1,14 +1,15 @@
 /**
  * ResumeScreen — incomplete session detected · Resume or Start Fresh
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types';
-import { Colors, Font, Radius, rw, rh, rf } from '../constants/theme';
+import { Font, Radius, rw, rh, rf, type ThemePalette } from '../constants/theme';
+import { useTheme } from '../theme/ThemeContext';
 import { getQueueProgress } from '../services/photoQueue';
 import { getDeleteQueueIds, pauseSession } from '../services/swipeEngine';
 
@@ -17,6 +18,8 @@ type Props = StackScreenProps<RootStackParamList, 'Resume'>;
 export default function ResumeScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const sessionId = route.params?.sessionId;
 
   const [photosLeft, setPhotosLeft] = useState(0);
@@ -89,12 +92,12 @@ export default function ResumeScreen({ navigation, route }: Props) {
         <View style={[styles.card, { width: width - rw(40) }]}>
           <View style={styles.cardRow}>
             <Text style={[styles.cardLabel, { fontSize: rf(13) }]}>PHOTOS LEFT</Text>
-            <Text style={[styles.cardValue, { fontSize: rf(22), color: Colors.purple2 }]}>{photosLeft}</Text>
+            <Text style={[styles.cardValue, { fontSize: rf(22), color: colors.purple2 }]}>{photosLeft}</Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.cardRow}>
             <Text style={[styles.cardLabel, { fontSize: rf(13) }]}>MARKED TO DELETE</Text>
-            <Text style={[styles.cardValue, { fontSize: rf(22), color: Colors.delete }]}>{markedToDelete}</Text>
+            <Text style={[styles.cardValue, { fontSize: rf(22), color: colors.delete }]}>{markedToDelete}</Text>
           </View>
         </View>
 
@@ -126,20 +129,20 @@ export default function ResumeScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg },
+const createStyles = (colors: ThemePalette) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.bg },
   inner: { flex: 1, alignItems: 'center', paddingHorizontal: rw(20) },
-  iconBox: { backgroundColor: Colors.surfaceTint, alignItems: 'center', justifyContent: 'center', marginBottom: rh(24) },
-  iconGlyph: { color: Colors.purple3, fontWeight: Font.bold },
-  title: { fontWeight: Font.bold, color: Colors.textPrimary, marginBottom: rh(12) },
-  subtitle: { color: Colors.textSecondary, textAlign: 'center', lineHeight: rh(24), marginBottom: rh(28) },
-  card: { backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: rw(20), borderWidth: 1, borderColor: Colors.border },
+  iconBox: { backgroundColor: colors.surfaceTint, alignItems: 'center', justifyContent: 'center', marginBottom: rh(24) },
+  iconGlyph: { color: colors.purple3, fontWeight: Font.bold },
+  title: { fontWeight: Font.bold, color: colors.textPrimary, marginBottom: rh(12) },
+  subtitle: { color: colors.textSecondary, textAlign: 'center', lineHeight: rh(24), marginBottom: rh(28) },
+  card: { backgroundColor: colors.surface, borderRadius: Radius.xl, padding: rw(20), borderWidth: 1, borderColor: colors.border },
   cardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: rh(8) },
-  cardLabel: { color: Colors.textMuted, fontWeight: Font.semibold, letterSpacing: 0.8 },
+  cardLabel: { color: colors.textMuted, fontWeight: Font.semibold, letterSpacing: 0.8 },
   cardValue: { fontWeight: Font.bold },
-  divider: { height: 1, backgroundColor: Colors.border, marginVertical: rh(4) },
-  resumeBtn: { backgroundColor: Colors.purple3, paddingVertical: rh(18), alignItems: 'center', marginBottom: rh(12) },
-  resumeText: { color: Colors.white, fontWeight: Font.semibold },
-  freshBtn: { backgroundColor: Colors.surface, paddingVertical: rh(18), alignItems: 'center', borderWidth: 1.5, borderColor: Colors.border },
-  freshText: { color: Colors.textSecondary, fontWeight: Font.medium },
+  divider: { height: 1, backgroundColor: colors.border, marginVertical: rh(4) },
+  resumeBtn: { backgroundColor: colors.purple3, paddingVertical: rh(18), alignItems: 'center', marginBottom: rh(12) },
+  resumeText: { color: colors.white, fontWeight: Font.semibold },
+  freshBtn: { backgroundColor: colors.surface, paddingVertical: rh(18), alignItems: 'center', borderWidth: 1.5, borderColor: colors.border },
+  freshText: { color: colors.textSecondary, fontWeight: Font.medium },
 });
