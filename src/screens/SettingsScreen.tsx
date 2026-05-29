@@ -4,15 +4,16 @@
  * Sections:
  *   Appearance  — theme picker, reduce motion
  *   Feedback    — master haptics toggle, strength picker
- *   Swipe       — sensitivity, invert direction, confirm-before-delete
- *   Sync & Data — sync status row
+ *   Swipe       — sensitivity, invert direction
+ *   Session     — photos per session
  *   Permissions — photo library access + system settings shortcut
+ *   Data        — clear local data
  *   About       — help modal, privacy modal, version
  */
 import React, { useMemo, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Switch, useWindowDimensions, Alert, ActivityIndicator,
+  Switch, useWindowDimensions, Alert,
   Modal, Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,7 +25,6 @@ import { Font, Radius, rw, rh, rf, type ThemePalette } from '../constants/theme'
 import { useTheme } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { haptics } from '../services/hapticsService';
-import { getSyncStatus, syncAll, type SyncStatus } from '../services/syncService';
 import { resetDatabase } from '../services/databaseService';
 import type {
   ThemeMode, HapticStrength, SwipeSensitivity, AppSettings, RootStackParamList,
@@ -32,15 +32,6 @@ import type {
 
 type Nav = StackNavigationProp<RootStackParamList>;
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
-
-function formatRelative(ts: number | null): string {
-  if (!ts) return 'never';
-  const diff = Date.now() - ts;
-  if (diff < 60_000) return 'just now';
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
-  return `${Math.floor(diff / 86_400_000)}d ago`;
-}
 
 type Option<T extends string> = { value: T; label: string };
 
@@ -62,6 +53,15 @@ const SENSITIVITY_OPTIONS: Option<SwipeSensitivity>[] = [
   { value: 'firm',   label: 'Firm' },
 ];
 
+// Photos reviewed per session. '0' is the "All" sentinel — review the whole
+// remaining library in one session (handled in photoQueue.startSession).
+const SESSION_SIZE_OPTIONS: Option<string>[] = [
+  { value: '25',  label: '25' },
+  { value: '50',  label: '50' },
+  { value: '100', label: '100' },
+  { value: '0',   label: 'All' },
+];
+
 const APP_VERSION = '1.0.0';
 
 export default function SettingsScreen() {
@@ -73,19 +73,9 @@ export default function SettingsScreen() {
   const updateSettings = useStore((s) => s.updateSettings);
   const navigation = useNavigation<Nav>();
 
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>({ pendingCount: 0, lastSyncedAt: null });
-  const [syncing, setSyncing] = useState(false);
   const [photoPermStatus, setPhotoPermStatus] = useState<MediaLibrary.PermissionStatus | null>(null);
   const [helpVisible, setHelpVisible] = useState(false);
   const [privacyVisible, setPrivacyVisible] = useState(false);
-
-  const refreshSyncStatus = useCallback(async () => {
-    try {
-      setSyncStatus(await getSyncStatus());
-    } catch (e) {
-      console.warn('[settings] getSyncStatus failed:', e);
-    }
-  }, []);
 
   const checkPermissions = useCallback(async () => {
     try {
@@ -97,21 +87,8 @@ export default function SettingsScreen() {
   }, []);
 
   useFocusEffect(useCallback(() => {
-    refreshSyncStatus();
     checkPermissions();
-  }, [refreshSyncStatus, checkPermissions]));
-
-  const handleSyncNow = useCallback(async () => {
-    if (syncing) return;
-    haptics.buttonTap();
-    setSyncing(true);
-    try {
-      await syncAll();
-      await refreshSyncStatus();
-    } finally {
-      setSyncing(false);
-    }
-  }, [syncing, refreshSyncStatus]);
+  }, [checkPermissions]));
 
   const handleClearData = useCallback(() => {
     haptics.buttonTap();
@@ -237,45 +214,24 @@ export default function SettingsScreen() {
             value={settings.invertSwipe}
             onChange={(v) => setSetting('invertSwipe', v)}
           />
-          <ToggleRow
+        </View>
+
+        {/* ── Session ── */}
+        <SectionTitle styles={styles}>Session</SectionTitle>
+        <View style={[styles.card, { width: cardW, borderRadius: Radius.xl }]}>
+          <PickerRow
             styles={styles}
-            icon="warning-outline"
-            label="Confirm before delete"
-            value={settings.confirmDelete}
-            onChange={(v) => setSetting('confirmDelete', v)}
+            icon="layers-outline"
+            label="Photos per session"
+            value={String(settings.batchSize)}
+            options={SESSION_SIZE_OPTIONS}
+            onChange={(v) => setSetting('batchSize', Number(v))}
           />
         </View>
 
-        {/* ── Sync & Data ── */}
-        <SectionTitle styles={styles}>Sync &amp; Data</SectionTitle>
+        {/* ── Data ── */}
+        <SectionTitle styles={styles}>Data</SectionTitle>
         <View style={[styles.card, { width: cardW, borderRadius: Radius.xl }]}>
-          <View style={styles.row}>
-            <IconBox styles={styles} icon="cloud-outline" />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.rowLabel, { fontSize: rf(16) }]}>Sync status</Text>
-              <Text style={[styles.rowSubLabel, { fontSize: rf(13) }]}>
-                {syncStatus.pendingCount > 0
-                  ? `${syncStatus.pendingCount} pending · last sync ${formatRelative(syncStatus.lastSyncedAt)}`
-                  : `All synced · ${formatRelative(syncStatus.lastSyncedAt)}`}
-              </Text>
-            </View>
-          </View>
-          <TouchableOpacity
-            style={styles.row}
-            activeOpacity={0.6}
-            onPress={handleSyncNow}
-            disabled={syncing}
-          >
-            <IconBox styles={styles} icon="sync-outline" />
-            <Text style={[styles.rowLabel, { fontSize: rf(16) }]}>
-              {syncing ? 'Syncing…' : 'Sync now'}
-            </Text>
-            {syncing ? (
-              <ActivityIndicator color={colors.purple2} />
-            ) : (
-              <Ionicons name="chevron-forward" size={rf(16)} color={colors.textMuted} />
-            )}
-          </TouchableOpacity>
           <TouchableOpacity
             style={styles.row}
             activeOpacity={0.6}
@@ -298,8 +254,8 @@ export default function SettingsScreen() {
               <Text style={[styles.rowLabel, { fontSize: rf(16) }]}>Photo Library</Text>
               <Text style={[styles.rowSubLabel, { fontSize: rf(13) }]}>
                 {photoPermStatus === 'denied'
-                  ? 'Tap to allow access in Settings'
-                  : 'Manage in iOS Settings'}
+                  ? 'Tap to allow access in settings'
+                  : 'Manage in device settings'}
               </Text>
             </View>
             <View style={[styles.permBadge, { backgroundColor: permBadgeColor + '22' }]}>
@@ -311,7 +267,7 @@ export default function SettingsScreen() {
           </TouchableOpacity>
           <TouchableOpacity style={styles.row} activeOpacity={0.6} onPress={() => Linking.openSettings()}>
             <IconBox styles={styles} icon="settings-outline" />
-            <Text style={[styles.rowLabel, { fontSize: rf(16) }]}>Open iOS Settings</Text>
+            <Text style={[styles.rowLabel, { fontSize: rf(16) }]}>Open device settings</Text>
             <Ionicons name="open-outline" size={rf(15)} color={styles._chevronColor} />
           </TouchableOpacity>
         </View>
@@ -335,7 +291,7 @@ export default function SettingsScreen() {
             <Text style={[styles.rowSubLabel, { fontSize: rf(15) }]}>{APP_VERSION}</Text>
           </View>
         </View>
-
+{/* 
         <View style={styles.footer}>
           <View style={styles.footerRow}>
             <Text style={[styles.footerText, { fontSize: rf(13) }]}>
@@ -343,7 +299,7 @@ export default function SettingsScreen() {
             </Text>
             <Ionicons name="heart" size={rf(13)} color={colors.purple3} />
           </View>
-        </View>
+        </View> */}
       </ScrollView>
 
       {/* ── Help & Support Modal ── */}
@@ -421,7 +377,7 @@ export default function SettingsScreen() {
         </ModalSection>
 
         <ModalSection title="Photo library access" styles={styles}>
-          We request access to your photo library to show and delete photos. You can revoke this permission at any time in iOS Settings → PhotoSwipe → Photos. Revoking access will prevent the app from functioning.
+          We request access to your photo library to show and delete photos. You can revoke this permission at any time in your device settings under PhotoSwipe → Photos. Revoking access will prevent the app from functioning.
         </ModalSection>
 
         <ModalSection title="Local data" styles={styles}>

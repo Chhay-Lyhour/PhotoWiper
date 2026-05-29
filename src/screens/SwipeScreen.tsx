@@ -59,6 +59,7 @@ export default function SwipeScreen() {
   const insets = useSafeAreaInsets();
   const settings = useStore((s) => s.settings);
   const invertSwipe = settings.invertSwipe;
+  const reduceMotion = settings.reduceMotion;
   const SWIPE_THRESHOLD = thresholdFor(settings.swipeSensitivity);
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -129,7 +130,7 @@ export default function SwipeScreen() {
     try {
       // Close the current session (records stats) before starting a fresh batch.
       await completeSession(sessionId);
-      const newSid = await startSession();
+      const newSid = await startSession(settings.batchSize);
       setSessionId(newSid);
       setReviewed(0);
       setDeleteCount(0);
@@ -221,6 +222,8 @@ export default function SwipeScreen() {
   // flies right, delete flies left; inverted reverses both.
   const flyOffKeep = () => {
     haptics.commitKeep();
+    // Reduce motion: commit instantly with no fly-off / stack-rise animation.
+    if (reduceMotion) { commitKeep(); return; }
     startStackRise();
     const target = invertSwipe ? -FLY_DISTANCE : FLY_DISTANCE;
     translateX.value = withTiming(target, { duration: 220 }, (done) => {
@@ -230,6 +233,7 @@ export default function SwipeScreen() {
   };
   const flyOffDelete = () => {
     haptics.commitDelete();
+    if (reduceMotion) { commitDelete(); return; }
     startStackRise();
     const target = invertSwipe ? FLY_DISTANCE : -FLY_DISTANCE;
     translateX.value = withTiming(target, { duration: 220 }, (done) => {
@@ -264,27 +268,42 @@ export default function SwipeScreen() {
         const isKeep = !invertSwipe;
         if (isKeep) runOnJS(haptics.commitKeep)();
         else runOnJS(haptics.commitDelete)();
-        runOnJS(startStackRise)();
-        translateX.value = withTiming(FLY_DISTANCE, { duration: 220 }, (done) => {
-          'worklet';
-          if (done) {
-            if (isKeep) runOnJS(commitKeep)();
-            else runOnJS(commitDelete)();
-          }
-        });
+        // Reduce motion: commit instantly, skipping the fly-off animation.
+        if (reduceMotion) {
+          if (isKeep) runOnJS(commitKeep)();
+          else runOnJS(commitDelete)();
+        } else {
+          runOnJS(startStackRise)();
+          translateX.value = withTiming(FLY_DISTANCE, { duration: 220 }, (done) => {
+            'worklet';
+            if (done) {
+              if (isKeep) runOnJS(commitKeep)();
+              else runOnJS(commitDelete)();
+            }
+          });
+        }
       } else if (e.translationX < -SWIPE_THRESHOLD) {
         // Left past threshold → delete by default, keep when inverted.
         const isKeep = invertSwipe;
         if (isKeep) runOnJS(haptics.commitKeep)();
         else runOnJS(haptics.commitDelete)();
-        runOnJS(startStackRise)();
-        translateX.value = withTiming(-FLY_DISTANCE, { duration: 220 }, (done) => {
-          'worklet';
-          if (done) {
-            if (isKeep) runOnJS(commitKeep)();
-            else runOnJS(commitDelete)();
-          }
-        });
+        if (reduceMotion) {
+          if (isKeep) runOnJS(commitKeep)();
+          else runOnJS(commitDelete)();
+        } else {
+          runOnJS(startStackRise)();
+          translateX.value = withTiming(-FLY_DISTANCE, { duration: 220 }, (done) => {
+            'worklet';
+            if (done) {
+              if (isKeep) runOnJS(commitKeep)();
+              else runOnJS(commitDelete)();
+            }
+          });
+        }
+      } else if (reduceMotion) {
+        // Snap back with no spring when motion is reduced.
+        translateX.value = 0;
+        translateY.value = 0;
       } else {
         translateX.value = withSpring(0, { damping: 14, stiffness: 140 });
         translateY.value = withSpring(0, { damping: 14, stiffness: 140 });

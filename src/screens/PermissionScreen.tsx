@@ -17,7 +17,7 @@ import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types';
 import { Font, Radius, rw, rh, rf, type ThemePalette } from '../constants/theme';
 import { useTheme } from '../theme/ThemeContext';
-import { requestPhotoPermission } from '../services/permissions';
+import { requestPhotoPermission, isUsable } from '../services/permissions';
 
 type Props = StackScreenProps<RootStackParamList, 'Permission'>;
 
@@ -34,18 +34,21 @@ export default function PermissionScreen({ navigation }: Props) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [requesting, setRequesting] = useState(false);
 
-  // Demo mode: always proceed to Loading regardless of OS permission state.
-  // iOS only shows the native prompt once per install — after that the request
-  // returns silently with the cached answer. Bypassing the gate keeps the demo
-  // flow testable. Restore the real check when wiring up real photos.
+  // Respect the real OS permission result: only proceed to Loading when the
+  // grant is usable (full or limited access). Anything else routes to the
+  // Denied screen so the user gets a clear "access needed" path instead of
+  // landing on a silent error later when we try to read the library.
   const handleAllow = async () => {
     if (requesting) return;
     setRequesting(true);
     try {
-      await requestPhotoPermission().catch(() => {});
+      const { state } = await requestPhotoPermission();
+      navigation.replace(isUsable(state) ? 'Loading' : 'Denied');
+    } catch (err) {
+      console.warn('[Permission] request failed:', err);
+      navigation.replace('Denied');
     } finally {
       setRequesting(false);
-      navigation.replace('Loading');
     }
   };
 
