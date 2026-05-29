@@ -3,7 +3,7 @@
  * Light lavender bg · purple photo icon · 3 checklist items · Allow / Not now
  * Design ref: Image 6
  */
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types';
-import { Colors, Font, Radius, rw, rh, rf } from '../constants/theme';
+import { Font, Radius, rw, rh, rf, type ThemePalette } from '../constants/theme';
+import { useTheme } from '../theme/ThemeContext';
 import { requestPhotoPermission } from '../services/permissions';
 
 type Props = StackScreenProps<RootStackParamList, 'Permission'>;
@@ -28,6 +29,8 @@ const CHECKS = [
 export default function PermissionScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [requesting, setRequesting] = useState(false);
 
   // Demo mode: always proceed to Loading regardless of OS permission state.
@@ -104,10 +107,10 @@ export default function PermissionScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemePalette) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.bg,
+    backgroundColor: colors.bg,
   },
   inner: {
     flex: 1,
@@ -116,7 +119,7 @@ const styles = StyleSheet.create({
   },
   // Icon
   iconBox: {
-    backgroundColor: Colors.purple2,
+    backgroundColor: colors.purple2,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: rh(24),
@@ -125,18 +128,18 @@ const styles = StyleSheet.create({
   // Texts
   title: {
     fontWeight: Font.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: rh(12),
   },
   subtitle: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: rh(24),
     marginBottom: rh(28),
   },
   // Card
   card: {
-    backgroundColor: Colors.surfaceTint,
+    backgroundColor: colors.surfaceTint,
     borderRadius: Radius.xl,
     padding: rw(20),
     gap: rh(14),
@@ -150,22 +153,22 @@ const styles = StyleSheet.create({
     width: rw(28),
     height: rw(28),
     borderRadius: Radius.full,
-    backgroundColor: Colors.purple3,
+    backgroundColor: colors.purple3,
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkMark: {
-    color: Colors.white,
+    color: colors.white,
     fontWeight: Font.bold,
   },
   checkText: {
-    color: Colors.purple3,
+    color: colors.purple3,
     fontWeight: Font.medium,
     flex: 1,
   },
   // Buttons
   allowBtn: {
-    backgroundColor: Colors.purple3,
+    backgroundColor: colors.purple3,
     paddingVertical: rh(18),
     alignItems: 'center',
     marginBottom: rh(12),
@@ -174,7 +177,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   allowText: {
-    color: Colors.white,
+    color: colors.white,
     fontWeight: Font.semibold,
   },
   notNowBtn: {
@@ -182,6 +185,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: rw(24),
   },
   notNowText: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
 });

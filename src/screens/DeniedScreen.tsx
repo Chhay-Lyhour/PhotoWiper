@@ -3,7 +3,7 @@
  * Lock icon · numbered steps HOW TO ENABLE · Open Settings · re-check link
  * Design ref: Image 7 (full) + Image 2 (bottom-sheet state)
  */
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -18,7 +18,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types';
-import { Colors, Font, Radius, rw, rh, rf } from '../constants/theme';
+import { Font, Radius, rw, rh, rf, type ThemePalette } from '../constants/theme';
+import { useTheme } from '../theme/ThemeContext';
 import { checkPhotoPermission, isUsable } from '../services/permissions';
 
 type Props = StackScreenProps<RootStackParamList, 'Denied'>;
@@ -33,6 +34,8 @@ const STEPS = [
 export default function DeniedScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [checking, setChecking] = useState(false);
   const [showStillDenied, setShowStillDenied] = useState(false);
   const sentToSettings = useRef(false);
@@ -148,10 +151,10 @@ export default function DeniedScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemePalette) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.bg,
+    backgroundColor: colors.bg,
   },
   inner: {
     flex: 1,
@@ -160,7 +163,7 @@ const styles = StyleSheet.create({
   },
   // Icon
   iconBox: {
-    backgroundColor: Colors.purple2,
+    backgroundColor: colors.purple2,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: rh(24),
@@ -169,28 +172,28 @@ const styles = StyleSheet.create({
   // Texts
   title: {
     fontWeight: Font.bold,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
     marginBottom: rh(12),
   },
   subtitle: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: rh(24),
     marginBottom: rh(24),
   },
   // Card
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.xl,
     padding: rw(20),
     gap: rh(14),
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     marginBottom: rh(16),
   },
   cardLabel: {
-    color: Colors.purple3,
+    color: colors.purple3,
     fontWeight: Font.semibold,
     letterSpacing: 1.2,
     marginBottom: rh(4),
@@ -204,16 +207,16 @@ const styles = StyleSheet.create({
     width: rw(30),
     height: rw(30),
     borderRadius: Radius.full,
-    backgroundColor: Colors.purple3,
+    backgroundColor: colors.purple3,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepNum: {
-    color: Colors.white,
+    color: colors.white,
     fontWeight: Font.bold,
   },
   stepText: {
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     flex: 1,
   },
   // Privacy
@@ -225,18 +228,18 @@ const styles = StyleSheet.create({
   },
   privacyIcon: {},
   privacyText: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   // Inline hint
   stillDenied: {
-    color: Colors.delete,
+    color: colors.delete,
     textAlign: 'center',
     marginBottom: rh(10),
   },
 
   // Buttons
   settingsBtn: {
-    backgroundColor: Colors.purple3,
+    backgroundColor: colors.purple3,
     paddingVertical: rh(18),
     flexDirection: 'row',
     alignItems: 'center',
@@ -248,10 +251,10 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   settingsBtnIcon: {
-    color: Colors.white,
+    color: colors.white,
   },
   settingsBtnText: {
-    color: Colors.white,
+    color: colors.white,
     fontWeight: Font.semibold,
   },
   recheckBtn: {
@@ -259,7 +262,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: rw(24),
   },
   recheckText: {
-    color: Colors.purple3,
+    color: colors.purple3,
     fontWeight: Font.medium,
   },
 });

@@ -2,20 +2,23 @@
  * AllDoneScreen — celebration · storage freed hero · deleted/kept chips · View Stats
  * Design ref: Image 1
  */
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Animated, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types';
-import { Colors, Font, Radius, rw, rh, rf } from '../constants/theme';
+import { Font, Radius, rw, rh, rf, type ThemePalette } from '../constants/theme';
+import { useTheme } from '../theme/ThemeContext';
 
 type Props = StackScreenProps<RootStackParamList, 'AllDone'>;
 
 export default function AllDoneScreen({ route, navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { stats } = route.params;
 
   const fadeAnim  = useRef(new Animated.Value(0)).current;
@@ -71,7 +74,7 @@ export default function AllDoneScreen({ route, navigation }: Props) {
             <View style={[styles.chipIcon, { width: rw(40), height: rw(40), borderRadius: Radius.full, backgroundColor: '#FEE2E2' }]}>
               <Text style={{ fontSize: rf(18) }}>🗑</Text>
             </View>
-            <Text style={[styles.chipNum, { fontSize: rf(32), color: Colors.delete }]}>
+            <Text style={[styles.chipNum, { fontSize: rf(32), color: colors.delete }]}>
               {stats.totalDeleted}
             </Text>
             <Text style={[styles.chipLabel, { fontSize: rf(12) }]}>DELETED</Text>
@@ -82,7 +85,7 @@ export default function AllDoneScreen({ route, navigation }: Props) {
             <View style={[styles.chipIcon, { width: rw(40), height: rw(40), borderRadius: Radius.full, backgroundColor: '#DCFCE7' }]}>
               <Text style={{ fontSize: rf(18) }}>♥</Text>
             </View>
-            <Text style={[styles.chipNum, { fontSize: rf(32), color: Colors.keep }]}>
+            <Text style={[styles.chipNum, { fontSize: rf(32), color: colors.keep }]}>
               {stats.totalKept}
             </Text>
             <Text style={[styles.chipLabel, { fontSize: rf(12) }]}>KEPT</Text>
@@ -110,22 +113,22 @@ export default function AllDoneScreen({ route, navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg },
+const createStyles = (colors: ThemePalette) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.bg },
   inner: { flex: 1, alignItems: 'center', paddingHorizontal: rw(20), gap: rh(16) },
 
   // Icon
   iconCircle: {
-    backgroundColor: Colors.purple2,
+    backgroundColor: colors.purple2,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: Colors.purple3,
+    shadowColor: colors.purple3,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.35,
     shadowRadius: 20,
     elevation: 10,
   },
-  iconGlyph: { color: Colors.white, fontWeight: Font.bold },
+  iconGlyph: { color: colors.white, fontWeight: Font.bold },
   confetti: {
     position: 'absolute',
     top: -rh(10),
@@ -135,19 +138,19 @@ const styles = StyleSheet.create({
 
   // Title
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: rw(6) },
-  title: { fontWeight: Font.extrabold, color: Colors.textPrimary },
+  title: { fontWeight: Font.extrabold, color: colors.textPrimary },
   titleEmoji: {},
 
   // Subtitle
   subtitle: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: rh(24),
   },
 
   // Hero card
   heroCard: {
-    backgroundColor: Colors.purple2,
+    backgroundColor: colors.purple2,
     paddingVertical: rh(20),
     paddingHorizontal: rw(24),
     alignItems: 'center',
@@ -155,13 +158,13 @@ const styles = StyleSheet.create({
   heroRow: { marginBottom: rh(4) },
   heroLabel: { color: 'rgba(255,255,255,0.75)', fontWeight: Font.semibold, letterSpacing: 1 },
   heroAmountRow: { flexDirection: 'row', alignItems: 'flex-end' },
-  heroAmount: { color: Colors.white, fontWeight: Font.extrabold, lineHeight: rh(64) },
+  heroAmount: { color: colors.white, fontWeight: Font.extrabold, lineHeight: rh(64) },
   heroUnit: { color: 'rgba(255,255,255,0.85)', fontWeight: Font.semibold, marginBottom: rh(6) },
 
   // Chips
   chipsRow: { flexDirection: 'row', gap: rw(12) },
   chip: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     padding: rw(20),
     alignItems: 'center',
     gap: rh(6),
@@ -173,20 +176,20 @@ const styles = StyleSheet.create({
   },
   chipIcon: { alignItems: 'center', justifyContent: 'center' },
   chipNum: { fontWeight: Font.extrabold, lineHeight: rh(38) },
-  chipLabel: { color: Colors.textMuted, fontWeight: Font.semibold, letterSpacing: 0.8 },
+  chipLabel: { color: colors.textMuted, fontWeight: Font.semibold, letterSpacing: 0.8 },
 
   // Nudge
-  nudge: { color: Colors.textSecondary },
+  nudge: { color: colors.textSecondary },
 
   // Button
   viewStatsBtn: {
-    backgroundColor: Colors.purple2,
+    backgroundColor: colors.purple2,
     paddingVertical: rh(18),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: rw(8),
   },
-  viewStatsBtnIcon: { color: Colors.white },
-  viewStatsBtnText: { color: Colors.white, fontWeight: Font.semibold },
+  viewStatsBtnIcon: { color: colors.white },
+  viewStatsBtnText: { color: colors.white, fontWeight: Font.semibold },
 });

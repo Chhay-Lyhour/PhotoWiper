@@ -3,7 +3,7 @@
  * Dark purple background · logo · tagline · "Get Started" button
  * Design ref: Image 10 (dark theme)
  */
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types';
-import { Colors, Font, Radius, rw, rh, rf } from '../constants/theme';
+import { Font, Radius, rw, rh, rf, type ThemePalette } from '../constants/theme';
+import { useTheme } from '../theme/ThemeContext';
 import { getActiveSessionId } from '../services/photoQueue';
 
 type Props = StackScreenProps<RootStackParamList, 'Splash'>;
@@ -23,6 +24,8 @@ type Props = StackScreenProps<RootStackParamList, 'Splash'>;
 export default function SplashScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const opacity = useRef(new Animated.Value(0)).current;
   const slideY  = useRef(new Animated.Value(30)).current;
@@ -97,16 +100,19 @@ export default function SplashScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+// Splash is intentionally always dark (per the design ref) — `colors.bgDark`
+// is the same value in both palettes, so the screen stays on-brand regardless
+// of the user's theme preference.
+const createStyles = (colors: ThemePalette) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E1333',
+    backgroundColor: colors.bgDark,
     alignItems: 'center',
     justifyContent: 'center',
   },
   dot: {
     position: 'absolute',
-    backgroundColor: Colors.purple1,
+    backgroundColor: colors.purple1,
     borderRadius: 9999,
   },
   content: {
@@ -115,17 +121,17 @@ const styles = StyleSheet.create({
   },
   // Logo
   iconContainer: {
-    backgroundColor: Colors.purple2,
+    backgroundColor: colors.purple2,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: rh(8),
     position: 'relative',
   },
   iconGlyph: {
-    color: Colors.white,
+    color: colors.white,
   },
   iconPlus: {
-    color: Colors.white,
+    color: colors.white,
     position: 'absolute',
     top: rh(10),
     right: rw(10),
@@ -137,11 +143,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   namePhoto: {
-    color: Colors.white,
+    color: colors.white,
     fontWeight: Font.bold,
   },
   nameSwipe: {
-    color: Colors.purple1,
+    color: colors.purple1,
     fontWeight: Font.bold,
   },
   // Tagline
@@ -153,13 +159,13 @@ const styles = StyleSheet.create({
   },
   // Button
   btn: {
-    backgroundColor: Colors.purple2,
+    backgroundColor: colors.purple2,
     paddingVertical: rh(18),
     alignItems: 'center',
     marginTop: rh(16),
   },
   btnText: {
-    color: Colors.white,
+    color: colors.white,
     fontWeight: Font.semibold,
   },
   // Privacy

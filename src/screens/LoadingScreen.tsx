@@ -2,14 +2,15 @@
  * LoadingScreen — "SCANNING GALLERY" · big purple count · progress bar · spinner
  * Design ref: Image 5
  */
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, Animated, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types';
-import { Colors, Font, Radius, rw, rh, rf } from '../constants/theme';
+import { Font, Radius, rw, rh, rf, type ThemePalette } from '../constants/theme';
+import { useTheme } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { indexLibrary } from '../services/photoQueue';
 import { startSession } from '../services/photoQueue';
@@ -21,6 +22,8 @@ const STATUS_STEPS = ['Scanning your gallery…', 'Shuffling your gallery…', '
 export default function LoadingScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { loadingCount, loadingStatus } = useStore();
   const barAnim = useRef(new Animated.Value(0)).current;
   const spinAnim = useRef(new Animated.Value(0)).current;
@@ -102,15 +105,15 @@ export default function LoadingScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg, alignItems: 'center', justifyContent: 'center' },
+const createStyles = (colors: ThemePalette) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
   center: { alignItems: 'center' },
-  label: { color: Colors.textMuted, fontWeight: Font.semibold, letterSpacing: 1.4, marginBottom: rh(8) },
-  count: { color: Colors.purple2, fontWeight: Font.extrabold, lineHeight: rh(78) },
-  found: { color: Colors.textSecondary, marginTop: rh(4) },
-  barTrack: { height: rh(6), backgroundColor: Colors.surfaceTint, borderRadius: Radius.full, overflow: 'hidden', marginTop: rh(32) },
-  barFill: { height: '100%', backgroundColor: Colors.purple2, borderRadius: Radius.full },
+  label: { color: colors.textMuted, fontWeight: Font.semibold, letterSpacing: 1.4, marginBottom: rh(8) },
+  count: { color: colors.purple2, fontWeight: Font.extrabold, lineHeight: rh(78) },
+  found: { color: colors.textSecondary, marginTop: rh(4) },
+  barTrack: { height: rh(6), backgroundColor: colors.surfaceTint, borderRadius: Radius.full, overflow: 'hidden', marginTop: rh(32) },
+  barFill: { height: '100%', backgroundColor: colors.purple2, borderRadius: Radius.full },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: rw(8), marginTop: rh(16) },
-  spinner: { width: rw(18), height: rw(18), borderRadius: Radius.full, borderWidth: 2, borderColor: Colors.purple2, borderTopColor: Colors.transparent },
-  statusText: { color: Colors.textMuted },
+  spinner: { width: rw(18), height: rw(18), borderRadius: Radius.full, borderWidth: 2, borderColor: colors.purple2, borderTopColor: colors.transparent },
+  statusText: { color: colors.textMuted },
 });
