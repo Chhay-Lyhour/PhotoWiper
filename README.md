@@ -26,7 +26,7 @@ Built with **Expo (SDK 54)**, **React Native 0.81**, and **TypeScript**.
 | Animation / gestures | react-native-reanimated, react-native-gesture-handler |
 | Images | expo-image |
 | Haptics | expo-haptics |
-| Build | EAS Build |
+| Build | EAS Build | 
 
 ## Project Structure
 
@@ -83,8 +83,6 @@ Open the installed dev build and it will connect to the running Metro server.
 
 ```bash
 npm run android   # expo run:android (local native build)
-npm run ios       # expo run:ios
-npm run web       # expo start --web
 ```
 
 ## Building
@@ -106,8 +104,3 @@ and delete the photos you choose to remove.
 ## Notes
 
 - **Architecture is local-first.** All analytics, sessions, and stats live in on-device SQLite. The `server/` directory contains an earlier Express + MongoDB backend that the app no longer uses; it's kept for reference only.
-- **New Architecture** (Fabric/TurboModules) is enabled (`newArchEnabled: true`).
-
-## License
-
-Private project.
