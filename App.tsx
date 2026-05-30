@@ -1,7 +1,5 @@
-import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import AppNavigator from './src/navigation/AppNavigator';
-import { registerDevice } from './src/services/syncService';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 
 function AppInner() {
@@ -16,11 +14,8 @@ function AppInner() {
 }
 
 export default function App() {
-  useEffect(() => {
-    // Fire-and-forget — fails silently if the server is unreachable.
-    registerDevice();
-  }, []);
-
+  // Cloud sync removed — the app is fully local-first (SQLite). Stats/sessions
+  // never leave the device, so there's no device registration on startup.
   return (
     <ThemeProvider>
       <AppInner />

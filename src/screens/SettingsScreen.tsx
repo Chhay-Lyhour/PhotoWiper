@@ -437,9 +437,13 @@ function ContentModal({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  // On Android the Modal ignores presentationStyle and goes full-screen behind
+  // the status bar, so the header + close X land under the notch. Pad the top
+  // by the safe-area inset (and the scroll body by the bottom inset).
+  const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={[styles.modalContainer, { backgroundColor: colors.bg }]}>
+      <View style={[styles.modalContainer, { backgroundColor: colors.bg, paddingTop: insets.top }]}>
         {/* Modal header */}
         <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
           <View style={[styles.modalIconWrap, { backgroundColor: colors.surfaceTint, borderRadius: Radius.md }]}>
@@ -453,7 +457,7 @@ function ContentModal({
 
         <ScrollView
           style={styles.modalScroll}
-          contentContainerStyle={styles.modalScrollContent}
+          contentContainerStyle={[styles.modalScrollContent, { paddingBottom: insets.bottom + rh(40) }]}
           showsVerticalScrollIndicator={false}
         >
           {children}

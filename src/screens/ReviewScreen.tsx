@@ -76,9 +76,9 @@ export default function ReviewScreen({ navigation }: Props) {
     navigation.replace('Deleting');
   };
 
-  // 3-column grid: padding (rw(20) each side) + 2 gaps of 4px between cells
+  // 3-column grid: padding (rw(20) each side) + 2 gaps between cells
   const GRID_PADDING = rw(20);
-  const GRID_GAP = 4;
+  const GRID_GAP = rw(4);
   const CELL = Math.floor((width - GRID_PADDING * 2 - GRID_GAP * 2) / 3);
 
   return (
