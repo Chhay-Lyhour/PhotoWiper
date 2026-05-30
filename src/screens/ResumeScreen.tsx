@@ -11,8 +11,9 @@ import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types';
 import { Font, Radius, rw, rh, rf, type ThemePalette } from '../constants/theme';
 import { useTheme } from '../theme/ThemeContext';
-import { getQueueProgress } from '../services/photoQueue';
+import { getQueueProgress, refreshLibrary } from '../services/photoQueue';
 import { getDeleteQueueIds, pauseSession } from '../services/swipeEngine';
+import { checkPhotoPermission, isUsable } from '../services/permissions';
 
 type Props = StackScreenProps<RootStackParamList, 'Resume'>;
 
@@ -55,12 +56,19 @@ export default function ResumeScreen({ navigation, route }: Props) {
     return () => { cancelled = true; };
   }, [sessionId]);
 
-  const handleResume = () => {
+  const handleResume = async () => {
     if (busy) return;
+    setBusy(true);
     try {
-      navigation.replace('MainTabs');
+      // Pull in any newly-accessible photos (and drop revoked ones) before
+      // continuing, so resuming reflects the current library — fixes "resume
+      // doesn't show photos I just granted access to".
+      const { state } = await checkPhotoPermission();
+      if (isUsable(state)) await refreshLibrary();
     } catch (err) {
-      console.warn('[Resume] navigation failed:', err);
+      console.warn('[Resume] refresh before resume failed:', err);
+    } finally {
+      navigation.replace('MainTabs');
     }
   };
 
@@ -112,7 +120,9 @@ export default function ResumeScreen({ navigation, route }: Props) {
           disabled={busy}
         >
           <Ionicons name="refresh" size={rf(18)} color={colors.white} />
-          <Text style={[styles.resumeText, { fontSize: rf(17) }]}>Resume session</Text>
+          <Text style={[styles.resumeText, { fontSize: rf(17) }]}>
+            {busy ? 'Loading…' : 'Resume session'}
+          </Text>
         </TouchableOpacity>
 
         {/* Start fresh */}

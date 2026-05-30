@@ -72,6 +72,7 @@ export default function SettingsScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const settings = useStore((s) => s.settings);
   const updateSettings = useStore((s) => s.updateSettings);
+  const setLibraryDirty = useStore((s) => s.setLibraryDirty);
   const navigation = useNavigation<Nav>();
 
   const [permState, setPermState] = useState<PermissionState | null>(null);
@@ -129,10 +130,12 @@ export default function SettingsScreen() {
     try {
       await MediaLibrary.presentPermissionsPickerAsync();
       await checkPermissions();
+      // Selection may have changed — tell the Swipe screen to re-scan on focus.
+      setLibraryDirty(true);
     } catch (e) {
       console.warn('[settings] presentPermissionsPickerAsync failed:', e);
     }
-  }, [checkPermissions]);
+  }, [checkPermissions, setLibraryDirty]);
 
   const cardW = width - rw(40);
 
@@ -289,11 +292,6 @@ export default function SettingsScreen() {
               <Ionicons name="add-circle-outline" size={rf(16)} color={styles._chevronColor} />
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={styles.row} activeOpacity={0.6} onPress={() => Linking.openSettings()}>
-            <IconBox styles={styles} icon="settings-outline" />
-            <Text style={[styles.rowLabel, { fontSize: rf(16) }]}>Open device settings</Text>
-            <Ionicons name="open-outline" size={rf(15)} color={styles._chevronColor} />
-          </TouchableOpacity>
         </View>
 
         {/* ── About ── */}

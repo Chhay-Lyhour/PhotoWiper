@@ -3,10 +3,11 @@
  * Drag-to-swipe card: left = delete, right = keep
  * Two states: active swiping / "All caught up" empty state
  */
-import React, { useState, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   Animated as RNAnimated, Easing,
+  AppState, type AppStateStatus,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -32,8 +33,10 @@ import {
   getQueueProgress,
   startSession,
   countUnreviewedPhotos,
+  refreshLibrary,
 } from '../services/photoQueue';
 import { commitSwipe, undoLastSwipe, getDeleteQueueIds, completeSession } from '../services/swipeEngine';
+import { checkPhotoPermission, isUsable } from '../services/permissions';
 import { haptics } from '../services/hapticsService';
 import { useStore } from '../store/useStore';
 import type { SwipeSensitivity } from '../types';
@@ -144,6 +147,42 @@ export default function SwipeScreen() {
     }
   }, [sessionId, loadingMore, refreshQueue]);
 
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshingRef = useRef(false);
+
+  // Re-scan the library and fold in newly-accessible photos (or drop revoked
+  // ones), then reload the queue. Used by the manual refresh button, the
+  // all-done state, and automatically when the app returns to the foreground.
+  const handleRefresh = useCallback(async () => {
+    if (refreshingRef.current) return;
+    refreshingRef.current = true;
+    setRefreshing(true);
+    try {
+      const { state } = await checkPhotoPermission();
+      if (!isUsable(state)) return;
+      await refreshLibrary();
+      let sid = await getActiveSessionId();
+      if (!sid) sid = await startSession(settings.batchSize);
+      setSessionId(sid);
+      await refreshQueue(sid);
+      await refreshDeleteCount(sid);
+    } catch (e) {
+      console.warn('[handleRefresh]', e);
+    } finally {
+      refreshingRef.current = false;
+      setRefreshing(false);
+    }
+  }, [settings.batchSize, refreshQueue, refreshDeleteCount]);
+
+  // Auto-refresh when the app returns to the foreground — catches permission
+  // changes the user made in device settings or the system photo picker.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
+      if (s === 'active') handleRefresh();
+    });
+    return () => sub.remove();
+  }, [handleRefresh]);
+
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
@@ -154,9 +193,15 @@ export default function SwipeScreen() {
         setSessionId(sid);
         await refreshQueue(sid);
         await refreshDeleteCount(sid);
+        // If photo access changed elsewhere (Settings → Manage selected photos),
+        // re-scan now so newly-selected photos appear in the queue.
+        if (useStore.getState().libraryDirty) {
+          useStore.getState().setLibraryDirty(false);
+          await handleRefresh();
+        }
       })();
       return () => { cancelled = true; };
-    }, [refreshQueue, refreshDeleteCount]),
+    }, [refreshQueue, refreshDeleteCount, handleRefresh]),
   );
 
   const resetCard = useCallback(() => {
@@ -216,26 +261,16 @@ export default function SwipeScreen() {
   // Button-tap fly-offs. Direction of travel depends on invertSwipe so the
   // visual matches the swipe semantics the user expects: by default keep
   // flies right, delete flies left; inverted reverses both.
+  // Instant advance: commit immediately and show the next card centered. No
+  // fly-off animation, so there's no window where the just-swiped photo can
+  // reappear before the next one renders.
   const flyOffKeep = () => {
     haptics.commitKeep();
-    // Reduce motion: commit instantly with no fly-off / stack-rise animation.
-    if (reduceMotion) { commitKeep(); return; }
-    startStackRise();
-    const target = invertSwipe ? -FLY_DISTANCE : FLY_DISTANCE;
-    translateX.value = withTiming(target, { duration: 220 }, (done) => {
-      'worklet';
-      if (done) runOnJS(commitKeep)();
-    });
+    commitKeep();
   };
   const flyOffDelete = () => {
     haptics.commitDelete();
-    if (reduceMotion) { commitDelete(); return; }
-    startStackRise();
-    const target = invertSwipe ? FLY_DISTANCE : -FLY_DISTANCE;
-    translateX.value = withTiming(target, { duration: 220 }, (done) => {
-      'worklet';
-      if (done) runOnJS(commitDelete)();
-    });
+    commitDelete();
   };
 
   // Pan gesture
@@ -264,38 +299,21 @@ export default function SwipeScreen() {
         const isKeep = !invertSwipe;
         if (isKeep) runOnJS(haptics.commitKeep)();
         else runOnJS(haptics.commitDelete)();
-        // Reduce motion: commit instantly, skipping the fly-off animation.
-        if (reduceMotion) {
-          if (isKeep) runOnJS(commitKeep)();
-          else runOnJS(commitDelete)();
-        } else {
-          runOnJS(startStackRise)();
-          translateX.value = withTiming(FLY_DISTANCE, { duration: 220 }, (done) => {
-            'worklet';
-            if (done) {
-              if (isKeep) runOnJS(commitKeep)();
-              else runOnJS(commitDelete)();
-            }
-          });
-        }
+        // Instant advance — zero the card now and commit; the next photo renders
+        // centered with no fly-off, so the swiped photo can't reappear.
+        translateX.value = 0;
+        translateY.value = 0;
+        if (isKeep) runOnJS(commitKeep)();
+        else runOnJS(commitDelete)();
       } else if (e.translationX < -SWIPE_THRESHOLD) {
         // Left past threshold → delete by default, keep when inverted.
         const isKeep = invertSwipe;
         if (isKeep) runOnJS(haptics.commitKeep)();
         else runOnJS(haptics.commitDelete)();
-        if (reduceMotion) {
-          if (isKeep) runOnJS(commitKeep)();
-          else runOnJS(commitDelete)();
-        } else {
-          runOnJS(startStackRise)();
-          translateX.value = withTiming(-FLY_DISTANCE, { duration: 220 }, (done) => {
-            'worklet';
-            if (done) {
-              if (isKeep) runOnJS(commitKeep)();
-              else runOnJS(commitDelete)();
-            }
-          });
-        }
+        translateX.value = 0;
+        translateY.value = 0;
+        if (isKeep) runOnJS(commitKeep)();
+        else runOnJS(commitDelete)();
       } else if (reduceMotion) {
         // Snap back with no spring when motion is reduced.
         translateX.value = 0;
@@ -398,18 +416,32 @@ export default function SwipeScreen() {
             {reviewed} / {total} reviewed
           </Text>
         </View>
-        <TouchableOpacity
-          style={[styles.badgeBtn, { width: rw(52), height: rw(52), borderRadius: Radius.xl }]}
-          onPress={handleReview}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="checkmark" size={rf(20)} color={colors.white} />
-          {deleteCount > 0 && (
-            <View style={styles.badge}>
-              <Text style={[styles.badgeText, { fontSize: rf(11) }]}>{deleteCount}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={[styles.refreshBtn, { width: rw(44), height: rw(44), borderRadius: Radius.xl }]}
+            onPress={() => { haptics.selection(); handleRefresh(); }}
+            activeOpacity={0.85}
+            disabled={refreshing}
+          >
+            <Ionicons
+              name="refresh"
+              size={rf(20)}
+              color={refreshing ? colors.textMuted : colors.purple3}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.badgeBtn, { width: rw(52), height: rw(52), borderRadius: Radius.xl }]}
+            onPress={handleReview}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="checkmark" size={rf(20)} color={colors.white} />
+            {deleteCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={[styles.badgeText, { fontSize: rf(11) }]}>{deleteCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* ── Progress bar ── */}
@@ -557,6 +589,19 @@ export default function SwipeScreen() {
                 <Text style={[styles.emptySubtitle, { fontSize: rf(15) }]}>
                   You've reviewed every photo in your library.
                 </Text>
+                <Text style={[styles.emptyHint, { fontSize: rf(13) }]}>
+                  Added photos or changed photo access? Refresh to pull them in.
+                </Text>
+                <TouchableOpacity
+                  style={[styles.reviewBtn, { borderRadius: Radius.full, opacity: refreshing ? 0.6 : 1 }]}
+                  onPress={handleRefresh}
+                  activeOpacity={0.85}
+                  disabled={refreshing}
+                >
+                  <Text style={[styles.reviewBtnText, { fontSize: rf(16) }]}>
+                    {refreshing ? 'Refreshing…' : 'Refresh library'}
+                  </Text>
+                </TouchableOpacity>
               </>
             )}
           </View>
@@ -608,6 +653,12 @@ const createStyles = (c: ThemePalette) => StyleSheet.create({
   },
   headerTitle: { fontWeight: Font.bold, color: c.textPrimary },
   headerSub: { color: c.textSecondary, marginTop: rh(2) },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: rw(10) },
+  refreshBtn: {
+    backgroundColor: c.surfaceTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   badgeBtn: {
     backgroundColor: c.purple2,
     alignItems: 'center',
@@ -648,6 +699,8 @@ const createStyles = (c: ThemePalette) => StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    // Top padding keeps the card from riding up into the progress bar.
+    paddingTop: rh(24),
   },
   // Stack container holds all 3 cards at the same absolute position
   cardStack: {
@@ -713,6 +766,7 @@ const createStyles = (c: ThemePalette) => StyleSheet.create({
   emptyEmoji: { color: '#F59E0B', textAlign: 'center', lineHeight: rh(56) },
   emptyTitle: { fontWeight: Font.bold, color: c.textPrimary, textAlign: 'center' },
   emptySubtitle: { color: c.textSecondary, textAlign: 'center', lineHeight: rh(22) },
+  emptyHint: { color: c.textMuted, textAlign: 'center', marginTop: rh(10), paddingHorizontal: rw(12) },
   reviewBtn: {
     backgroundColor: c.purple3,
     paddingVertical: rh(14),
