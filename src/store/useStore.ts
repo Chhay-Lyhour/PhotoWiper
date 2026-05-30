@@ -22,6 +22,9 @@ interface AppState {
   deletingProgress: number;
   deletingCurrent: number;
   deletingTotal: number;
+  // Set when photo access may have changed (e.g. user managed limited-access
+  // selection) so the Swipe screen re-scans the library on next focus.
+  libraryDirty: boolean;
 
   // ── Settings ─────────────────────────────────────────────────────────────
   settings: AppSettings;
@@ -41,6 +44,7 @@ interface AppState {
   setLoadingStatus: (s: string) => void;
   setDeletingProgress: (current: number, total: number) => void;
   updateSettings: (patch: Partial<AppSettings>) => void;
+  setLibraryDirty: (dirty: boolean) => void;
   resetSession: () => void;
 }
 
@@ -70,6 +74,7 @@ export const useStore = create<AppState>()(persist((set, get) => ({
   deletingProgress: 0,
   deletingCurrent: 0,
   deletingTotal: 0,
+  libraryDirty: false,
   settings: DEFAULT_SETTINGS,
 
   setPhotoQueue: (photos) => set({ photoQueue: photos }),
@@ -104,6 +109,7 @@ export const useStore = create<AppState>()(persist((set, get) => ({
     set({ deletingCurrent: current, deletingTotal: total, deletingProgress: total > 0 ? current / total : 0 }),
   updateSettings: (patch) =>
     set((s) => ({ settings: { ...s.settings, ...patch } })),
+  setLibraryDirty: (dirty) => set({ libraryDirty: dirty }),
   resetSession: () =>
     set({ photoQueue: [], deleteQueue: [], swipeHistory: [], currentSession: null, loadingProgress: 0, loadingCount: 0, loadingStatus: '', deletingProgress: 0, deletingCurrent: 0, deletingTotal: 0 }),
 }),

@@ -74,6 +74,96 @@ export async function indexLibrary(
   return photos.length;
 }
 
+/**
+ * Re-scan the photo library and reconcile it with what's accessible NOW, then
+ * fold any newly-accessible photos into the active session's queue. Used after
+ * the user changes photo permissions (granted more / full / revoked selection).
+ *
+ * - Newly-accessible, never-reviewed photos are appended to the active session
+ *   so they appear in the current review queue (no need to start fresh).
+ * - Photos no longer accessible (deselected in limited access) are deleted from
+ *   `photos`; ON DELETE CASCADE drops their session_queue rows, and getDeleteQueue's
+ *   JOIN drops them from any pending delete list. swipe_records have no photo FK,
+ *   so historical stats stay intact.
+ */
+export async function refreshLibrary(
+  onProgress?: (p: IndexProgress) => void,
+): Promise<{ added: number; removed: number; total: number }> {
+  const photos = await fetchAll(onProgress);
+  const now = Date.now();
+  let removed = 0;
+  let added = 0;
+
+  await withTransaction(async (db) => {
+    // Upsert every currently-accessible photo, stamping indexed_at = now so we
+    // can detect rows NOT seen this scan (= access revoked) below.
+    for (const p of photos) {
+      await db.runAsync(
+        `INSERT INTO photos (id, uri, filename, file_size, width, height, creation_time, modification_time, media_type, indexed_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           uri = excluded.uri,
+           filename = excluded.filename,
+           file_size = COALESCE(excluded.file_size, photos.file_size),
+           width = excluded.width,
+           height = excluded.height,
+           modification_time = excluded.modification_time,
+           indexed_at = excluded.indexed_at`,
+        p.id,
+        p.uri,
+        p.filename || null,
+        p.fileSize ?? null,
+        p.width || null,
+        p.height || null,
+        p.creationTime || null,
+        p.modificationTime || null,
+        p.mediaType,
+        now,
+      );
+    }
+
+    // Remove photos that weren't seen this scan (no longer accessible).
+    const del = await db.runAsync(`DELETE FROM photos WHERE indexed_at < ?`, now);
+    removed = del.changes ?? 0;
+
+    // Append newly-accessible, never-reviewed photos to the active session.
+    const active = await db.getFirstAsync<{ id: string }>(
+      `SELECT id FROM sessions WHERE status = 'active' ORDER BY started_at DESC LIMIT 1`,
+    );
+    if (active) {
+      const fresh = await db.getAllAsync<{ id: string }>(
+        `SELECT id FROM photos
+         WHERE id NOT IN (SELECT photo_id FROM swipe_records)
+           AND id NOT IN (SELECT photo_id FROM session_queue WHERE session_id = ?)`,
+        active.id,
+      );
+      if (fresh.length) {
+        const posRow = await db.getFirstAsync<{ maxPos: number | null }>(
+          `SELECT MAX(position) AS maxPos FROM session_queue WHERE session_id = ?`,
+          active.id,
+        );
+        let pos = (posRow?.maxPos ?? -1) + 1;
+        for (const id of shuffle(fresh.map((f) => f.id))) {
+          await db.runAsync(
+            `INSERT INTO session_queue (session_id, photo_id, position, status) VALUES (?, ?, ?, 'pending')`,
+            active.id,
+            id,
+            pos++,
+          );
+        }
+        await db.runAsync(
+          `UPDATE sessions SET total_photos = total_photos + ? WHERE id = ?`,
+          fresh.length,
+          active.id,
+        );
+        added = fresh.length;
+      }
+    }
+  });
+
+  return { added, removed, total: photos.length };
+}
+
 export async function getActiveSessionId(): Promise<string | null> {
   const db = await getDatabase();
   const row = await db.getFirstAsync<{ id: string }>(

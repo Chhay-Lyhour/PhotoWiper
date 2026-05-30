@@ -59,11 +59,12 @@ function MainTabs() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        // Lift the bar above the Android gesture/nav bar (insets.bottom is 0 on
-        // 3-button nav, ~16–48 on gesture nav) so the tabs are never overlapped.
+        // Lift the bar above the Android system bar. Some Android 3-button-nav
+        // devices under-report insets.bottom (often 0), so enforce a minimum gap
+        // so the labels never touch the system buttons.
         tabBarStyle: [
           styles.tabBar,
-          { height: rh(60) + insets.bottom, paddingBottom: insets.bottom + rh(8) },
+          { height: rh(58) + Math.max(insets.bottom, rh(14)), paddingBottom: Math.max(insets.bottom, rh(14)) },
         ],
         tabBarLabelStyle: styles.tabLabel,
         tabBarActiveTintColor: colors.purple3,
