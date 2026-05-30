@@ -58,7 +58,17 @@ export default function HistoryScreen() {
     >
       {/* ── Page header ── */}
       <Text style={[styles.pageTitle, { fontSize: rf(32) }]}>Session history</Text>
-      <Text style={[styles.pageSub,   { fontSize: rf(15) }]}>All cleanup sessions</Text>
+      <Text style={[styles.pageSub, { fontSize: rf(15) }]}>All cleanup sessions</Text>
+
+      {/* ── Total freed banner ── */}
+      {sessions.length > 0 && (
+        <View style={[styles.totalBanner, { width: cardW, borderRadius: Radius.xl }]}>
+          <Text style={[styles.totalLabel, { fontSize: rf(12) }]}>TOTAL FREED</Text>
+          <Text style={[styles.totalAmount, { fontSize: rf(36) }]}>
+            {totalMB.toFixed(1)} MB
+          </Text>
+        </View>
+      )}
 
       {/* ── Session cards ── */}
       <View style={styles.cardList}>
@@ -106,15 +116,6 @@ export default function HistoryScreen() {
         )}
       </View>
 
-      {/* ── Total freed banner ── */}
-      {sessions.length > 0 && (
-        <View style={[styles.totalBanner, { width: cardW, borderRadius: Radius.xl }]}>
-          <Text style={[styles.totalLabel, { fontSize: rf(12) }]}>TOTAL FREED</Text>
-          <Text style={[styles.totalAmount, { fontSize: rf(36) }]}>
-            {totalMB.toFixed(1)} MB
-          </Text>
-        </View>
-      )}
     </ScrollView>
   );
 }
@@ -125,7 +126,7 @@ const createStyles = (colors: ThemePalette) => StyleSheet.create({
 
   // Header
   pageTitle: { alignSelf: 'flex-start', fontWeight: Font.bold, color: colors.textPrimary },
-  pageSub:   { alignSelf: 'flex-start', color: colors.textSecondary, marginBottom: rh(4) },
+  pageSub: { alignSelf: 'flex-start', color: colors.textSecondary, marginBottom: rh(4) },
 
   // Cards
   cardList: { gap: rh(10), width: '100%', alignItems: 'center' },
@@ -145,10 +146,10 @@ const createStyles = (colors: ThemePalette) => StyleSheet.create({
     marginBottom: rh(14),
   },
   sessionDate: { fontWeight: Font.semibold, color: colors.textPrimary },
-  sessionMB:   { fontWeight: Font.semibold, color: colors.purple2 },
+  sessionMB: { fontWeight: Font.semibold, color: colors.purple2 },
 
   sessionStats: { flexDirection: 'row', justifyContent: 'space-around' },
-  sessionStat:  { alignItems: 'center', gap: rh(4) },
+  sessionStat: { alignItems: 'center', gap: rh(4) },
   sessionStatNum: { fontWeight: Font.bold },
   sessionStatLabel: { color: colors.textMuted, fontWeight: Font.semibold, letterSpacing: 0.8 },
 
@@ -160,7 +161,7 @@ const createStyles = (colors: ThemePalette) => StyleSheet.create({
     gap: rh(4),
     marginTop: rh(4),
   },
-  totalLabel:  { color: 'rgba(255,255,255,0.7)', fontWeight: Font.semibold, letterSpacing: 1 },
+  totalLabel: { color: 'rgba(255,255,255,0.7)', fontWeight: Font.semibold, letterSpacing: 1 },
   totalAmount: { color: colors.white, fontWeight: Font.extrabold },
-  emptyText:   { color: colors.textSecondary, textAlign: 'center', paddingVertical: rh(24) },
+  emptyText: { color: colors.textSecondary, textAlign: 'center', paddingVertical: rh(24) },
 });
