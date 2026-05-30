@@ -1,4 +1,4 @@
-# PhotoSwipe
+# PhotoWiper
 
 A swipe-to-clean photo gallery app for Android. Review your camera roll Tinder-style — swipe to keep or delete — and reclaim storage fast. All data stays on-device.
 
