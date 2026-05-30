@@ -3,7 +3,7 @@
  * Drag-to-swipe card: left = delete, right = keep
  * Two states: active swiping / "All caught up" empty state
  */
-import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   Animated as RNAnimated, Easing,
@@ -94,7 +94,9 @@ export default function SwipeScreen() {
   const startStackRise = useCallback(() => {
     RNAnimated.timing(stackProgress, {
       toValue: 1,
-      duration: 260,
+      // Match the 220ms card fly-off so the back-card rise and the commit land
+      // together — closes the race window that caused the post-swipe flicker.
+      duration: 220,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
@@ -160,47 +162,41 @@ export default function SwipeScreen() {
   const resetCard = useCallback(() => {
     translateX.value = 0;
     translateY.value = 0;
-  }, [translateX, translateY]);
-
-  // Ghost-image fix: reset card position only AFTER React swaps in the new
-  // photo. Calling resetCard() inside commitKeep/commitDelete caused the old
-  // photo to snap back to centre for one frame before the next photo appeared.
-  // Also resets stackProgress so the new back cards start at their resting
-  // offsets (matching where the previous ones landed at progress=1).
-  useEffect(() => {
-    translateX.value = 0;
-    translateY.value = 0;
     stackProgress.setValue(0);
-  }, [photo?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [translateX, translateY, stackProgress]);
 
+  // Reset transforms ATOMICALLY with the queue slice (not in a deferred effect).
+  // The front card is keyed by photo.id, so slicing unmounts the flown-off card
+  // and mounts the next one fresh reading translateX=0 / stackProgress=0 — it
+  // appears centered with no off-screen flash revealing the card beneath.
   const commitKeep = useCallback(() => {
     if (!sessionId || !photo) return;
     const sid = sessionId;
     const pid = photo.id;
     const size = photo.fileSize;
+    resetCard();
     setQueue((q) => q.slice(1));
     setReviewed((r) => r + 1);
-    // resetCard() removed — useEffect above handles position reset on photo change.
     (async () => {
       await commitSwipe(sid, pid, 'keep', size);
       await refreshQueue(sid);
     })().catch((e) => console.warn('[commitKeep]', e));
-  }, [sessionId, photo, refreshQueue]);
+  }, [sessionId, photo, refreshQueue, resetCard]);
 
   const commitDelete = useCallback(() => {
     if (!sessionId || !photo) return;
     const sid = sessionId;
     const pid = photo.id;
     const size = photo.fileSize;
+    resetCard();
     setQueue((q) => q.slice(1));
     setReviewed((r) => r + 1);
     setDeleteCount((c) => c + 1);
-    // resetCard() removed — useEffect above handles position reset on photo change.
     (async () => {
       await commitSwipe(sid, pid, 'delete', size);
       await refreshQueue(sid);
     })().catch((e) => console.warn('[commitDelete]', e));
-  }, [sessionId, photo, refreshQueue]);
+  }, [sessionId, photo, refreshQueue, resetCard]);
 
   const handleUndo = useCallback(async () => {
     if (!sessionId) return;
@@ -430,6 +426,7 @@ export default function SwipeScreen() {
             {/* Card 2 — deepest (photo[2]) — animates one slot forward on commit */}
             {queue[2] && (
               <RNAnimated.View
+                key={queue[2].id}
                 style={[styles.card, styles.cardBehind,
                   { width: Card.width, borderRadius: Card.radius },
                   card2BehindAnimatedStyle,
@@ -437,13 +434,14 @@ export default function SwipeScreen() {
                 pointerEvents="none"
               >
                 <Image source={{ uri: queue[2].uri }} style={styles.cardImage}
-                  contentFit="cover" cachePolicy="memory" />
+                  contentFit="cover" cachePolicy="memory" recyclingKey={queue[2].id} />
               </RNAnimated.View>
             )}
 
             {/* Card 1 — middle (photo[1]) — animates up to front on commit */}
             {queue[1] && (
               <RNAnimated.View
+                key={queue[1].id}
                 style={[styles.card, styles.cardBehind,
                   { width: Card.width, borderRadius: Card.radius },
                   card1BehindAnimatedStyle,
@@ -451,13 +449,14 @@ export default function SwipeScreen() {
                 pointerEvents="none"
               >
                 <Image source={{ uri: queue[1].uri }} style={styles.cardImage}
-                  contentFit="cover" cachePolicy="memory" />
+                  contentFit="cover" cachePolicy="memory" recyclingKey={queue[1].id} />
               </RNAnimated.View>
             )}
 
             {/* Card 0 — front (photo[0], swipeable) */}
             <GestureDetector gesture={pan}>
               <Animated.View
+                key={photo.id}
                 style={[styles.card, styles.cardBehind,
                   { width: Card.width, borderRadius: Card.radius },
                   cardAnimatedStyle,
@@ -468,6 +467,7 @@ export default function SwipeScreen() {
                   style={styles.cardImage}
                   contentFit="cover"
                   cachePolicy="memory-disk"
+                  recyclingKey={photo.id}
                 />
 
                 {/* Right-swipe overlay — keep by default, delete when inverted */}

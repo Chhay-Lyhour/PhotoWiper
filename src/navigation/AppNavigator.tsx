@@ -1,9 +1,9 @@
 import React, { useMemo } from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -53,12 +53,18 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 
 function MainTabs() {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarStyle: styles.tabBar,
+        // Lift the bar above the Android gesture/nav bar (insets.bottom is 0 on
+        // 3-button nav, ~16–48 on gesture nav) so the tabs are never overlapped.
+        tabBarStyle: [
+          styles.tabBar,
+          { height: rh(60) + insets.bottom, paddingBottom: insets.bottom + rh(8) },
+        ],
         tabBarLabelStyle: styles.tabLabel,
         tabBarActiveTintColor: colors.purple3,
         tabBarInactiveTintColor: colors.textMuted,
@@ -112,8 +118,8 @@ const createStyles = (colors: ThemePalette) => StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopColor: colors.border,
     borderTopWidth: StyleSheet.hairlineWidth,
-    height: rh(84),
-    paddingBottom: Platform.OS === 'ios' ? rh(20) : rh(10),
+    // height + paddingBottom are applied dynamically in MainTabs using
+    // useSafeAreaInsets so the bar clears the Android gesture/nav bar.
     paddingTop: rh(8),
   },
   tabLabel: {

@@ -3,7 +3,7 @@
  * Light lavender bg · purple photo icon · 3 checklist items · Allow / Not now
  * Design ref: Image 6
  */
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,7 @@ import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types';
 import { Font, Radius, rw, rh, rf, type ThemePalette } from '../constants/theme';
 import { useTheme } from '../theme/ThemeContext';
-import { requestPhotoPermission, isUsable } from '../services/permissions';
+import { requestPhotoPermission, checkPhotoPermission, isUsable } from '../services/permissions';
 
 type Props = StackScreenProps<RootStackParamList, 'Permission'>;
 
@@ -33,6 +33,28 @@ export default function PermissionScreen({ navigation }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [requesting, setRequesting] = useState(false);
+  // Gate the Allow UI until we've checked the current OS state, so users only
+  // ever see the screen that matches their state (smart routing):
+  //   usable  → straight into the app (don't re-ask)
+  //   blocked → Denied screen (can't prompt; Open Settings is the only path)
+  //   else    → show the Allow UI below
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { state } = await checkPhotoPermission();
+        if (cancelled) return;
+        if (isUsable(state)) { navigation.replace('Loading'); return; }
+        if (state === 'blocked') { navigation.replace('Denied'); return; }
+      } catch (err) {
+        console.warn('[Permission] initial check failed:', err);
+      }
+      if (!cancelled) setChecked(true);
+    })();
+    return () => { cancelled = true; };
+  }, [navigation]);
 
   // Respect the real OS permission result: only proceed to Loading when the
   // grant is usable (full or limited access). Anything else routes to the
@@ -53,6 +75,12 @@ export default function PermissionScreen({ navigation }: Props) {
   };
 
   const handleNotNow = () => navigation.replace('Denied');
+
+  // While the initial state check is in flight, render an empty bg (avoids a
+  // flash of the Allow UI before we may redirect to Loading/Denied).
+  if (!checked) {
+    return <View style={styles.container} />;
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + rh(24), paddingBottom: insets.bottom + rh(16) }]}>
